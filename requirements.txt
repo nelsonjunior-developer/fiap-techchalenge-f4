@@ -21,7 +21,11 @@ python-dateutil==2.9.0.post0
 pytz==2024.1
 
 # === Visualization / EDA ===
+
 matplotlib==3.8.4
+
+# === Frontend (Streamlit) ===
+streamlit==1.37.1
 
 # === API & Monitoring ===
 fastapi==0.115.0

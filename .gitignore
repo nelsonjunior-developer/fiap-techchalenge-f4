@@ -144,6 +144,22 @@ ENV/
 env.bak/
 venv.bak/
 
+# --- Dotenv variants (do not commit local secrets) ---
+# Ignore common dotenv file names/variants
+.env.*
+*.env
+*.env.*
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
+**/.env.staging
+# Docker-specific env in subfolders (if any)
+docker/.env
+
+# Keep the example template tracked
+!.env.example
+
 # Spyder project settings
 .spyderproject
 .spyproject
