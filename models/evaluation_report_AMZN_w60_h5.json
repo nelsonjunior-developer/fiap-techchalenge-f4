@@ -1,0 +1,67 @@
+{
+  "ticker": "AMZN",
+  "window": 60,
+  "horizon": 5,
+  "metrics_test_model": {
+    "mae": 25.14964410882247,
+    "rmse": 26.701781065643083,
+    "mape": 11.431084095741125
+  },
+  "metrics_test_naive": {
+    "mae": 5.308771916439657,
+    "rmse": 7.169609828155518,
+    "mape": 2.5104218657905504
+  },
+  "per_horizon": [
+    {
+      "step": 1,
+      "mae": 24.177304117303144,
+      "rmse": 25.201212431162716,
+      "mape": 11.052704587102658
+    },
+    {
+      "step": 2,
+      "mae": 25.786032291880826,
+      "rmse": 27.179461902070035,
+      "mape": 11.737441800148735
+    },
+    {
+      "step": 3,
+      "mae": 26.62713957669442,
+      "rmse": 28.166597058542038,
+      "mape": 12.103900047919097
+    },
+    {
+      "step": 4,
+      "mae": 22.558945906789678,
+      "rmse": 24.369410781883413,
+      "mape": 10.209210414843808
+    },
+    {
+      "step": 5,
+      "mae": 26.598798651444284,
+      "rmse": 28.35270589179393,
+      "mape": 12.052163628691341
+    }
+  ],
+  "plot_pred_vs_true": "models/plots/pred_vs_true_AMZN_w60_h5.png",
+  "model_path": "models/model_h5.h5",
+  "scaler_path": "models/scaler.joblib",
+  "residuals": {
+    "residuals_time_plot": "models/plots/residuals_time_AMZN_w60_h5.png",
+    "residuals_hist_plot": "models/plots/residuals_hist_AMZN_w60_h5.png",
+    "residuals_stats_t1": {
+      "mean": 24.163469080339397,
+      "std": 7.157364738789839,
+      "p95_abs": 34.142790985107425
+    }
+  },
+  "walkforward": {
+    "walkforward_plot": "models/plots/walkforward_mae_t1_AMZN_w60_h5.png",
+    "summary": {
+      "mae_t1_mean": 24.177304117303144,
+      "mae_t1_median": 25.004005432128892,
+      "n": 228
+    }
+  }
+}
