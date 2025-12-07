@@ -26,54 +26,71 @@ from typing import List
 import json
 import time
 from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from tensorflow.keras.models import load_model  # type: ignore
 from joblib import load as joblib_load
-from prometheus_client import (
-    Counter, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
-)
 
 # Config e Schemas
 from src.utils.config import settings
 from api.schemas import PredictRequest, PredictResponse, PredictTickerRequest
+from api.monitoring import prometheus_middleware, metrics_endpoint
+
+tags_metadata = [
+    {"name": "health", "description": "Liveness (/health) e readiness (/ready)."},
+    {"name": "metadata", "description": "Artefatos e hiperparâmetros do treino."},
+    {"name": "features", "description": "Ordem oficial de features para validação de payloads."},
+    {"name": "predict", "description": "Inferência com features pré-processadas ou por ticker."},
+    {"name": "monitoring", "description": "Métricas Prometheus para observabilidade."},
+]
+app = FastAPI(title="Tech Challenge F4 – AMZN LSTM API", version="1.2.3", openapi_tags=tags_metadata)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ajuste em produção
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.middleware("http")(prometheus_middleware)
 
 # -------------------------------------------------------------------------------------
-# Prometheus
+# Logging de acesso estruturado (JSON) – Requisito #6
 # -------------------------------------------------------------------------------------
-REGISTRY = CollectorRegistry()
-HTTP_REQUESTS = Counter(
-    "http_requests_total", "Total HTTP requests",
-    ["method", "endpoint", "http_status"], registry=REGISTRY
-)
-HTTP_LATENCY = Histogram(
-    "http_request_duration_seconds", "HTTP request latency",
-    ["method", "endpoint"], registry=REGISTRY
-)
-
-# -------------------------------------------------------------------------------------
-# App e middleware
-# -------------------------------------------------------------------------------------
-app = FastAPI(title="Tech Challenge F4 – AMZN LSTM API", version="1.2.2")
+# Configura o sink do Loguru para emitir JSON no stdout quando LOG_JSON=true (default).
+LOG_JSON = os.getenv("LOG_JSON", "true").lower() in ("1", "true", "yes")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+try:
+    logger.remove()
+except Exception:
+    pass
+logger.add(sys.stdout, level=LOG_LEVEL, serialize=LOG_JSON, backtrace=False, diagnose=False)
 
 @app.middleware("http")
-async def prometheus_middleware(request: Request, call_next):
+async def access_log(request: Request, call_next):
+    """Emite um log por requisição com campos estruturados.
+
+    Campos: request_id, method, path, status, latency_ms
+    Obs.: não logamos payloads para evitar PII acidental.
+    """
+    rid = str(uuid4())
     start = time.perf_counter()
-    try:
-        response = await call_next(request)
-        status = response.status_code
-    except Exception:
-        status = 500
-        HTTP_REQUESTS.labels(request.method, request.url.path, str(status)).inc()
-        HTTP_LATENCY.labels(request.method, request.url.path).observe(time.perf_counter() - start)
-        raise
-    else:
-        HTTP_REQUESTS.labels(request.method, request.url.path, str(status)).inc()
-        HTTP_LATENCY.labels(request.method, request.url.path).observe(time.perf_counter() - start)
-        return response
+    response = await call_next(request)
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    logger.bind(
+        request_id=rid,
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        latency_ms=elapsed_ms,
+    ).info("request")
+    return response
 
 # -------------------------------------------------------------------------------------
 # Utilidades
@@ -125,11 +142,23 @@ def _get_scaler():
 # -------------------------------------------------------------------------------------
 # Endpoints
 # -------------------------------------------------------------------------------------
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health() -> dict:
     return {"status": "ok", "ticker": settings.TICKER, "window_default": settings.WINDOW}
 
-@app.get("/metadata")
+@app.get("/ready", tags=["health"])
+def ready():
+    paths = [
+        Path(settings.MODELS_DIR) / "model_h1.h5",
+        Path(settings.MODELS_DIR) / "model_h5.h5",
+        Path(settings.SCALER_PATH),
+    ]
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        raise HTTPException(status_code=503, detail={"ready": False, "missing": missing})
+    return {"ready": True}
+
+@app.get("/metadata", tags=["metadata"])
 def metadata() -> JSONResponse:
     p = Path(settings.MODELS_DIR) / "metadata.json"
     if not p.exists():
@@ -140,11 +169,11 @@ def metadata() -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Falha ao ler metadata: {e}")
     return JSONResponse(content=data)
 
-@app.get("/metrics")
+@app.get("/metrics", tags=["monitoring"])
 def metrics() -> PlainTextResponse:
-    return PlainTextResponse(generate_latest(REGISTRY).decode("utf-8"), media_type=CONTENT_TYPE_LATEST)
+    return metrics_endpoint()
 
-@app.get("/features-order")
+@app.get("/features-order", tags=["features"])
 def features_order(horizon: int, window: int | None = None) -> dict:
     if horizon not in (1, 5):
         raise HTTPException(status_code=422, detail="horizon deve ser 1 ou 5")
@@ -152,7 +181,7 @@ def features_order(horizon: int, window: int | None = None) -> dict:
     feats = _load_features_order_from_npz(w, horizon)
     return {"horizon": horizon, "window": w, "n_features": len(feats), "features": feats}
 
-@app.post("/predict", response_model=PredictResponse)
+@app.post("/predict", response_model=PredictResponse, tags=["predict"])
 def predict(payload: PredictRequest) -> PredictResponse:
     if payload.horizon not in (1, 5):
         raise HTTPException(status_code=422, detail="horizon deve ser 1 ou 5")
@@ -216,7 +245,7 @@ def predict(payload: PredictRequest) -> PredictResponse:
         metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json") if (Path(settings.MODELS_DIR) / "metadata.json").exists() else None,
     )
 
-@app.post("/predict-ticker", response_model=PredictResponse)
+@app.post("/predict-ticker", response_model=PredictResponse, tags=["predict"])
 def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
     if payload.horizon not in (1, 5):
         raise HTTPException(status_code=422, detail="horizon deve ser 1 ou 5")
@@ -259,6 +288,10 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
         scaler_path=str(settings.SCALER_PATH),
         metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json") if (Path(settings.MODELS_DIR) / "metadata.json").exists() else None,
     )
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
 # -------------------------------------------------------------------------------------
 # Execução local

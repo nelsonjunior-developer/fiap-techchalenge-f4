@@ -1,0 +1,23 @@
+{
+  "ticker": "AMZN",
+  "period": [
+    "2018-01-02",
+    "2025-12-05"
+  ],
+  "shape": [
+    1994,
+    8
+  ],
+  "missing": {
+    "Open": 0,
+    "High": 0,
+    "Low": 0,
+    "Close": 0,
+    "Volume": 0,
+    "ret1": 1,
+    "logret1": 1,
+    "vol20": 20
+  },
+  "adf_close_pvalue": 0.6133850019252143,
+  "adf_logret1_pvalue": 0.0
+}

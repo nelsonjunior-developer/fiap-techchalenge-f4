@@ -3,14 +3,14 @@
   "window": 60,
   "horizon": 1,
   "metrics_test_model": {
-    "mae": 29.87670609046673,
-    "rmse": 32.46153700710436,
-    "mape": 13.473330757462287
+    "mae": 29.9810216376122,
+    "rmse": 32.74636947197145,
+    "mape": 13.443050285884988
   },
   "metrics_test_naive": {
-    "mae": 3.277543298129377,
-    "rmse": 4.610899650203918,
-    "mape": 1.5443821492655536
+    "mae": 3.284425905917553,
+    "rmse": 4.616701595612411,
+    "mape": 1.5423423406756054
   },
   "per_horizon": [],
   "plot_pred_vs_true": "models/plots/pred_vs_true_AMZN_w60_h1.png",
@@ -20,17 +20,17 @@
     "residuals_time_plot": "models/plots/residuals_time_AMZN_w60_h1.png",
     "residuals_hist_plot": "models/plots/residuals_hist_AMZN_w60_h1.png",
     "residuals_stats_t1": {
-      "mean": 29.730192644842738,
-      "std": 13.033304652471855,
-      "p95_abs": 46.48789978027342
+      "mean": 29.776847482234874,
+      "std": 13.625860252277155,
+      "p95_abs": 47.21202697753906
     }
   },
   "walkforward": {
     "walkforward_plot": "models/plots/walkforward_mae_t1_AMZN_w60_h1.png",
     "summary": {
-      "mae_t1_mean": 29.87670609046673,
-      "mae_t1_median": 31.669174194335938,
-      "n": 232
+      "mae_t1_mean": 29.9810216376122,
+      "mae_t1_median": 31.770462036132812,
+      "n": 235
     }
   }
 }

@@ -107,6 +107,105 @@ deactivate
 
 > Dica: se preferir, crie um `Makefile` com alvos como `make venv`, `make install` e `make api` para simplificar os comandos (opcional).
 
+## Makefile (atalhos de execução)
+
+O projeto traz um **Makefile na raiz** com alvos que encurtam a execução do fluxo completo.
+> Dica: rode `make help` para listar e descrever todos os alvos.
+
+### Ordem recomendada de execução (do zero)
+
+1) **Instalar e preparar ambiente**  
+```bash
+make install
+make env
+```
+
+2) **Baixar e preparar dados (yfinance → data/raw & data/processed)**  
+```bash
+make data
+# variações:
+# make data START=2019-01-01
+# make data NO_WINSORIZE=1
+```
+
+3) **Gerar janelas/arrays (features) para treino**  
+```bash
+make features        # gera H=1 e H=5 (WINDOW=60 por padrão)
+# ou apenas um dos horizontes:
+# make features-h1
+# make features-h5
+```
+
+4) **Treinar modelos (H=1 e H=5) e salvar artefatos em `models/`**  
+```bash
+make train           # ajustável: make train EPOCHS=80 BATCH=256 WINDOW=60
+```
+
+5) **(Recomendado) Avaliar e gerar plots**  
+```bash
+make eval-h1
+make eval-h5
+```
+
+6) **Subir a API**  
+```bash
+make api             # modo padrão (logs JSON)
+# ou, para desenvolvimento (auto-reload e logs verbosos):
+make api-dev
+```
+
+7) **Smoke tests / Readiness**  
+```bash
+make smoke           # GET /health e /features-order
+make ready           # GET /ready
+```
+
+> Dica: você pode encadear etapas numa linha:
+> ```bash
+> make data && make features && make train && make api
+> ```
+
+### Setup rápido
+```bash
+make install   # cria/usa .venv e instala requirements
+make env       # cria .env a partir de .env.example, se não existir
+```
+
+### Pipeline de dados e treino
+```bash
+make data                      # baixa/prepara dados (yfinance)
+make features                  # gera npz para H=1 e H=5 (window=60 por padrão)
+make train                     # treina H=1 e H=5 e salva artefatos em models/
+make eval-h1                   # avaliação do modelo H=1 (plots e métricas)
+make eval-h5                   # avaliação do modelo H=5 (plots e métricas)
+```
+
+### API e Frontend
+```bash
+make api                       # sobe a API (Uvicorn) com logs em JSON (LOG_JSON=true)
+make api-dev                   # API em modo dev (--reload) e logs texto (LOG_JSON=false)
+make smoke                     # smoke tests: /health e /features-order
+make ready                     # readiness: verifica se modelos/scaler existem
+make streamlit                 # frontend Streamlit consumindo a API
+```
+
+### Qualidade, testes e limpeza
+```bash
+make lint                      # ruff check (se instalado)
+make format                    # ruff format (se instalado)
+make test                      # pytest (se instalado)
+make clean                     # remove npz, modelos, scaler, metadata, plots
+```
+
+### Docker / Compose
+```bash
+make docker-build              # build da imagem da API (docker/Dockerfile)
+make docker-run                # executa a imagem mapeando a porta 8000
+make compose-up                # (opcional) API + Prometheus/Grafana
+make compose-down              # derruba o compose
+```
+
+> Variáveis úteis: `WINDOW`, `EPOCHS`, `BATCH`, `API_PORT`, `API_BASE_URL`. Ex.: `make train EPOCHS=80` ou `make api API_PORT=9000`.
 
 ## Treinamento (LSTM H=1 e H=5)
 
@@ -191,11 +290,22 @@ Série do erro absoluto no passo **t+1** ao longo das amostras de teste (sem re-
 - **Arquivos .npz não encontrados:** gere as janelas com `src.features` para o `--horizon` correspondente.  
 - **Aviso do Keras sobre HDF5:** ignorável; o `evaluate.py` usa `compile=False`. Se quiser, podemos salvar também no formato `.keras`.  
 - **Erro de backend gráfico:** o `evaluate.py` já força `matplotlib` no backend `Agg`; apenas garanta `matplotlib` instalado.
-```
- 
+
 ---
 
 ## API REST (FastAPI) — Endpoints e Exemplos
+
+### Novidades do módulo API (atualizado)
+- **CORS habilitado**: o frontend (Streamlit) pode chamar a API do navegador.
+- **Readiness**: novo endpoint `GET /ready` retorna `{"ready": true}` quando modelos/scaler estão presentes (503 se faltarem artefatos).
+- **Redirecionamento da raiz**: `GET /` redireciona para `/docs` (Swagger/OpenAPI).
+- **OpenAPI organizado**: endpoints agrupados em tags (`health`, `metadata`, `features`, `predict`, `monitoring`).
+- **Métricas Prometheus**: movidas para `api/monitoring.py` (middleware + `/metrics`).
+- **Logging de acesso estruturado**: middleware registra cada request com `request_id`, `method`, `path`, `status`, `latency_ms`. Configure via `.env`:
+  ```env
+  LOG_JSON=true   # logs em JSON para observabilidade (stdout)
+  LOG_LEVEL=INFO  # nível do Loguru
+  ```
 
 ### Como subir a API
 Com o ambiente ativo e dependências instaladas:
@@ -204,6 +314,13 @@ Com o ambiente ativo e dependências instaladas:
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 # (opcional) recarregamento automático em dev
 # uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+```bash
+# Alternativa com Makefile
+make api       # prod-like
+# ou
+make api-dev   # modo desenvolvimento (--reload)
 ```
 
 - Documentação interativa (Swagger/OpenAPI): `http://127.0.0.1:8000/docs`
@@ -227,6 +344,21 @@ curl -s http://127.0.0.1:8000/health | jq .
   "ticker": "AMZN",
   "window_default": 60
 }
+```
+
+### (novo) `GET /ready`
+**Intenção:** Readiness para orquestradores — verifica artefatos obrigatórios.
+
+```bash
+curl -s http://127.0.0.1:8000/ready | jq .
+```
+**Resposta (exemplo ok):**
+```json
+{ "ready": true }
+```
+**Erro (exemplo):** status `503` com lista de ausentes:
+```json
+{ "ready": false, "missing": ["models/model_h1.h5", "models/scaler.joblib"] }
 ```
 
 ---
@@ -349,11 +481,109 @@ scrape_configs:
       - targets: ["localhost:8000"]
 ```
 
+> Observação: `GET /` redireciona para `/docs` e CORS está habilitado (ajuste domínios em produção).
+
 ---
 
-### Códigos de erro (mais comuns)
-- **400**: inconsistências de artefatos/ordem de features (ex.: `.npz` ausente)
-- **422**: payload inválido (ex.: `horizon` fora de {1,5}, shapes incorretos)
-- **503**: endpoint indisponível (ex.: módulo de inferência por ticker ausente)
+## Frontend (Streamlit)
 
-``` 
+A aplicação Streamlit consome a API para exibir histórico e previsões de forma interativa.
+
+```bash
+# Em desenvolvimento (API já rodando em :8000)
+streamlit run app.py
+```
+
+- URL default da API: `http://127.0.0.1:8000`. Para apontar para outra URL, defina a variável no seu `.env`:
+  ```env
+  API_BASE_URL=http://127.0.0.1:8000
+  ```
+
+> Dica: se estiver rodando a API em Docker e o Streamlit na máquina, mantenha o mapeamento `-p 8000:8000` no container.
+
+---
+
+## Smoke tests (rápido)
+
+Verifique rapidamente se tudo responde antes de integrar outros componentes:
+
+```bash
+# 1) Healthcheck
+curl -s http://127.0.0.1:8000/health | jq .
+
+# 2) Ordem de features para o par (horizon=1, window=60)
+curl -s "http://127.0.0.1:8000/features-order?horizon=1&window=60" | jq .
+
+# 3) Previsão com payload mínimo (dados dummy – apenas validação de rota)
+python - <<'PY' > payload.json
+import json
+row=[0.0]*12
+payload={"horizon":1,"window":60,"recent_features":[row]*60}
+print(json.dumps(payload))
+PY
+curl -s -X POST http://127.0.0.1:8000/predict -H "Content-Type: application/json" --data-binary @payload.json | jq .
+```
+
+---
+
+## Docker (API) 
+
+Executar a API em container facilita o deploy e a integração com Prometheus/Grafana.
+
+```bash
+# Build (usa docker/Dockerfile)
+docker build -t tech-f4-api -f docker/Dockerfile .
+
+# Run (mapeando a porta 8000)
+docker run --rm -p 8000:8000 --env-file .env tech-f4-api
+```
+
+> A imagem expõe a aplicação em `0.0.0.0:8000` via Uvicorn. Ajuste variáveis no `.env` se necessário.
+
+Se optar por orquestrar API + Prometheus/Grafana:
+
+```bash
+# Requer docker-compose v2+
+docker compose -f docker/docker-compose.yml up --build
+```
+
+---
+
+## Monitoramento (Prometheus)
+
+A rota `/metrics` expõe contadores e histogramas por método/rota/status:
+
+- `http_requests_total{method,endpoint,http_status}`
+- `http_request_duration_seconds_bucket{method,endpoint,le}`
+
+Exemplo de scrape básico (Prometheus):
+```yaml
+scrape_configs:
+  - job_name: tech-challenge-api
+    static_configs:
+      - targets: ["localhost:8000"]
+```
+
+> Para Grafana, importe os dashboards do diretório `monitoring/dashboards/` (opcional) e ajuste a datasource para o seu Prometheus.
+
+---
+
+## Troubleshooting
+
+- **`ModuleNotFoundError: src.*`**: garanta que está executando a partir da **raiz do repositório** ou exporte:
+  ```bash
+  export PYTHONPATH=$(pwd)
+  ```
+- **`from __future__ import annotations`**: deve estar **no topo** do arquivo Python.
+- **Yahoo Finance bloqueando requisições**: use `yfinance>=0.2.66` e **não** injete `requests.Session()` manualmente.
+- **TensorFlow em Apple Silicon**: instale `tensorflow-macos` e `tensorflow-metal` ou use CPU (`tensorflow>=2.15,<3`).
+- **`metadata.json`/`scaler.joblib` ausentes**: gere `src.features`/`src.train` antes de subir a API.
+- **Validação de payload em `/predict`**: utilize `/features-order` para obter a ordem correta das features.
+
+---
+
+## Reprodutibilidade
+
+- Seeds fixadas no código; escalonamento ajustado **apenas** no treino e persistido em `models/scaler.joblib`.
+- Artefatos versionados em `models/` + `models/metadata.json` com métricas, datas e hiperparâmetros.
+- Treino sem vazamento temporal: splits por data e backtesting simples (walk-forward) na avaliação.
