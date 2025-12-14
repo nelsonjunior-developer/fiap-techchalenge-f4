@@ -665,16 +665,16 @@ A figura abaixo resume o fluxo ponta‑a‑ponta do projeto.
 
 ```mermaid
 flowchart LR
-    Y[yfinance] --> D[data/raw]
-    D --> P[src.data &amp; src.features]
-    P --> NPZ[data/processed (.npz)]
-    NPZ --> T[src.train]
-    T --> M((models:<br/>.h5, scaler, metadata))
-    M --> A[FastAPI (api)]
-    A -->|/metrics| PR[Prometheus]
-    PR --> G[Grafana]
-    A --> S[Streamlit app]
-    S --> A
+  Y[yfinance] --> D[data/raw]
+  D --> P[src.data + src.features]
+  P --> NPZ[data/processed npz]
+  NPZ --> T[src.train]
+  T --> M((models: h5, scaler, metadata))
+  M --> A[FastAPI]
+  A -->|/metrics| PR[Prometheus]
+  PR --> G[Grafana]
+  A --> S[Streamlit app]
+  S --> A
 ```
 
 > No modo Docker Compose, **API**, **Prometheus** e **Grafana** compartilham a mesma rede interna; o Grafana já vem provisionado com a datasource Prometheus e o dashboard “API Observability — Tech Challenge”.
