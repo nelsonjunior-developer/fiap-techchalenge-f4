@@ -38,9 +38,9 @@ tech-challenge/
 │   └── dashboards/              # Dashboards (JSON) para observabilidade (opcional)
 │
 ├── tests/
-│   ├── test_features.py         # Shapes/índices e janelas
-│   ├── test_inference.py        # Carregamento e seleção H=1/H=5
-│   └── test_api.py              # /health e /predict
+│   ├── test_features.py         # Shapes/índices e janelas dos .npz
+│   ├── test_inference.py        # Artefatos H=1/H=5 e smoke de inferência
+│   └── test_api.py              # Smoke dos endpoints (health, ready, metrics, predict)
 │
 ├── docker/
 │   ├── Dockerfile               # Imagem da API (python:3.11-slim + uvicorn)
@@ -106,6 +106,7 @@ deactivate
 ```
 
 > Dica: se preferir, crie um `Makefile` com alvos como `make venv`, `make install` e `make api` para simplificar os comandos (opcional).
+> **Atualização:** este repositório **já inclui** um `Makefile`. Rode `make help` para ver todos os alvos disponíveis.
 
 ## Makefile (atalhos de execução)
 
@@ -189,6 +190,13 @@ make ready                     # readiness: verifica se modelos/scaler existem
 make streamlit                 # frontend Streamlit consumindo a API
 ```
 
+> **Observação (Streamlit):** garanta que a API esteja rodando antes de abrir o frontend.
+> Por padrão o `app.py` usa `API_BASE_URL=http://127.0.0.1:8000`. Para apontar para outra URL:
+> ```bash
+> make streamlit API_BASE_URL=http://127.0.0.1:8000
+> ```
+> Se a página abrir “em branco”, clique em **Rerun** no topo do Streamlit. Os logs detalhados aparecem no terminal.
+
 ### Qualidade, testes e limpeza
 ```bash
 make lint                      # ruff check (se instalado)
@@ -196,6 +204,11 @@ make format                    # ruff format (se instalado)
 make test                      # pytest (se instalado)
 make clean                     # remove npz, modelos, scaler, metadata, plots
 ```
+
+### Testes automatizados e CI
+- Suite Pytest cobre features (.npz), artefatos de inferência (H=1/H=5) e smoke da API. Testes pesados fazem `skip` se artefatos faltarem ou se `CI=true`.
+- Rode localmente com `pytest` (ou `make test`), ou apenas um arquivo: `pytest tests/test_api.py`.
+- CI via GitHub Actions (`.github/workflows/ci.yml`): roda Ruff (`ruff check .`), Pytest filtrando marcações (`-m "not slow and not integration"`) e um smoke `/health` sob Uvicorn.
 
 ### Docker / Compose
 ```bash
@@ -587,3 +600,16 @@ scrape_configs:
 - Seeds fixadas no código; escalonamento ajustado **apenas** no treino e persistido em `models/scaler.joblib`.
 - Artefatos versionados em `models/` + `models/metadata.json` com métricas, datas e hiperparâmetros.
 - Treino sem vazamento temporal: splits por data e backtesting simples (walk-forward) na avaliação.
+### EDA (notebook)
+Execute o notebook de EDA automaticamente e gere o sumário em `notebooks/outputs/eda_summary_AMZN.json`:
+```bash
+make eda-run
+```
+
+Para abrir e executar manualmente no navegador:
+```bash
+# Requer .venv ativo
+. .venv/bin/activate; jupyter lab notebooks/
+# ou
+. .venv/bin/activate; jupyter notebook notebooks/eda.ipynb
+```

@@ -13,6 +13,7 @@ Uso:
   # flags opcionais:
   python -m src.evaluate --horizon 5 --window 60 --no-residuals --no-walkforward
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import matplotlib
+
 matplotlib.use("Agg")  # garante backend não interativo para salvar figuras
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,7 +42,10 @@ class EvalResult:
 
 # ---------- Utilidades de dados ----------
 
-def _load_npz(kind: str, ticker: str, window: int, horizon: int) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+
+def _load_npz(
+    kind: str, ticker: str, window: int, horizon: int
+) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     suffix = f"{ticker.upper()}_w{window}_h{horizon}"
     path = Path(settings.PROCESSED_DIR) / f"{kind}_{suffix}.npz"
     data = np.load(path, allow_pickle=True)
@@ -53,11 +58,16 @@ def _inverse_close(arr_scaled: np.ndarray, scaler, close_idx: int) -> np.ndarray
     if hasattr(scaler, "mean_") and hasattr(scaler, "scale_"):  # StandardScaler
         return arr_scaled * scaler.scale_[close_idx] + scaler.mean_[close_idx]
     if hasattr(scaler, "data_min_") and hasattr(scaler, "data_max_"):  # MinMaxScaler
-        return arr_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx]) + scaler.data_min_[close_idx]
+        return (
+            arr_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx])
+            + scaler.data_min_[close_idx]
+        )
     return arr_scaled
 
 
-def _evaluate_on_original_scale(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int) -> EvalResult:
+def _evaluate_on_original_scale(
+    y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int
+) -> EvalResult:
     y_true = _inverse_close(y_true_s, scaler, close_idx)
     y_pred = _inverse_close(y_pred_s, scaler, close_idx)
     mae = float(np.mean(np.abs(y_true - y_pred)))
@@ -67,7 +77,9 @@ def _evaluate_on_original_scale(y_true_s: np.ndarray, y_pred_s: np.ndarray, scal
     return EvalResult(mae=mae, rmse=rmse, mape=mape)
 
 
-def _per_horizon_metrics(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int) -> List[Dict[str, float]]:
+def _per_horizon_metrics(
+    y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int
+) -> List[Dict[str, float]]:
     """Métricas por passo futuro (t+1..t+H). Retorna lista de dicts."""
     y_true = _inverse_close(y_true_s, scaler, close_idx)
     y_pred = _inverse_close(y_pred_s, scaler, close_idx)
@@ -84,7 +96,9 @@ def _per_horizon_metrics(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, clo
     return out
 
 
-def _naive_persistence_from_X(X: np.ndarray, close_idx: int, horizon: int) -> np.ndarray:
+def _naive_persistence_from_X(
+    X: np.ndarray, close_idx: int, horizon: int
+) -> np.ndarray:
     """Baseline ingênuo (persistência) no espaço escalado: repete último Close da janela."""
     last_close = X[:, -1, close_idx]  # (n,)
     return np.repeat(last_close.reshape(-1, 1), horizon, axis=1)  # (n,H)
@@ -92,7 +106,10 @@ def _naive_persistence_from_X(X: np.ndarray, close_idx: int, horizon: int) -> np
 
 # ---------- Resíduos ----------
 
-def _compute_residuals_original(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int) -> np.ndarray:
+
+def _compute_residuals_original(
+    y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int
+) -> np.ndarray:
     """Retorna matriz (n,H) de resíduos no domínio original: y_true - y_pred."""
     y_true = _inverse_close(y_true_s, scaler, close_idx)
     y_pred = _inverse_close(y_pred_s, scaler, close_idx)
@@ -123,7 +140,10 @@ def _plot_residuals_hist(resid: np.ndarray, out_path: Path, title: str):
 
 # ---------- Walk-forward simples (modelo fixo) ----------
 
-def _walkforward_fixed_model(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int) -> Dict:
+
+def _walkforward_fixed_model(
+    y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int
+) -> Dict:
     """Backtesting simples com modelo fixo: erro por amostra ao longo do tempo (t+1).
 
     Observação: não há re-treino entre janelas; objetivo é inspecionar estabilidade temporal
@@ -132,7 +152,11 @@ def _walkforward_fixed_model(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler,
     y_true = _inverse_close(y_true_s, scaler, close_idx)
     y_pred = _inverse_close(y_pred_s, scaler, close_idx)
     # Série de erro absoluto para t+1
-    err_abs_t1 = np.abs(y_true[:, 0] - y_pred[:, 0]) if y_true.shape[1] >= 1 else np.abs(y_true.squeeze() - y_pred.squeeze())
+    err_abs_t1 = (
+        np.abs(y_true[:, 0] - y_pred[:, 0])
+        if y_true.shape[1] >= 1
+        else np.abs(y_true.squeeze() - y_pred.squeeze())
+    )
     summary = {
         "mae_t1_mean": float(np.mean(err_abs_t1)),
         "mae_t1_median": float(np.median(err_abs_t1)),
@@ -152,7 +176,15 @@ def _plot_walkforward(err_abs_t1: np.ndarray, out_path: Path, title: str):
 
 # ---------- Execução principal ----------
 
-def _plot_pred_vs_true(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close_idx: int, out_path: Path, title: str):
+
+def _plot_pred_vs_true(
+    y_true_s: np.ndarray,
+    y_pred_s: np.ndarray,
+    scaler,
+    close_idx: int,
+    out_path: Path,
+    title: str,
+):
     """Gráfico simples (índice de amostra no eixo x)."""
     y_true = _inverse_close(y_true_s, scaler, close_idx)
     y_pred = _inverse_close(y_pred_s, scaler, close_idx)
@@ -182,14 +214,18 @@ def _plot_pred_vs_true(y_true_s: np.ndarray, y_pred_s: np.ndarray, scaler, close
         plt.close()
 
 
-def evaluate(horizon: int, window: int, *, do_residuals: bool = True, do_walkforward: bool = True) -> Dict:
+def evaluate(
+    horizon: int, window: int, *, do_residuals: bool = True, do_walkforward: bool = True
+) -> Dict:
     # Carrega dados
     X_te, y_te, feats = _load_npz("test", settings.TICKER, window, horizon)
     assert "Close" in feats, "Feature 'Close' ausente."
     close_idx = feats.index("Close")
 
     # Carrega modelo (.h5) com compile=False para evitar desserializar losses/metrics legadas
-    model_path = Path(settings.MODELS_DIR) / ("model_h1.h5" if horizon == 1 else "model_h5.h5")
+    model_path = Path(settings.MODELS_DIR) / (
+        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+    )
     assert model_path.exists(), f"Modelo não encontrado: {model_path}"
     model = load_model(model_path, compile=False)
 
@@ -207,7 +243,9 @@ def evaluate(horizon: int, window: int, *, do_residuals: bool = True, do_walkfor
     res_base = _evaluate_on_original_scale(y_te, y_base_te, scaler, close_idx)
 
     # Métricas por horizonte (apenas se H>1)
-    per_h = _per_horizon_metrics(y_te, y_pred_te, scaler, close_idx) if horizon > 1 else []
+    per_h = (
+        _per_horizon_metrics(y_te, y_pred_te, scaler, close_idx) if horizon > 1 else []
+    )
 
     # Diretório de plots
     plots_dir = Path(settings.MODELS_DIR) / "plots"
@@ -215,16 +253,26 @@ def evaluate(horizon: int, window: int, *, do_residuals: bool = True, do_walkfor
 
     # Plot principal (pred vs true)
     out_plot = plots_dir / f"pred_vs_true_{settings.TICKER}_w{window}_h{horizon}.png"
-    _plot_pred_vs_true(y_te, y_pred_te, scaler, close_idx, out_plot, f"Pred vs True – H={horizon}")
+    _plot_pred_vs_true(
+        y_te, y_pred_te, scaler, close_idx, out_plot, f"Pred vs True – H={horizon}"
+    )
 
     # Resíduos
     resid_report = None
     if do_residuals:
         resid = _compute_residuals_original(y_te, y_pred_te, scaler, close_idx)
-        out_res_time = plots_dir / f"residuals_time_{settings.TICKER}_w{window}_h{horizon}.png"
-        out_res_hist = plots_dir / f"residuals_hist_{settings.TICKER}_w{window}_h{horizon}.png"
-        _plot_residuals_time(resid, out_res_time, f"Resíduos no tempo – H={horizon} (t+1)")
-        _plot_residuals_hist(resid, out_res_hist, f"Histograma de resíduos – H={horizon} (t+1)")
+        out_res_time = (
+            plots_dir / f"residuals_time_{settings.TICKER}_w{window}_h{horizon}.png"
+        )
+        out_res_hist = (
+            plots_dir / f"residuals_hist_{settings.TICKER}_w{window}_h{horizon}.png"
+        )
+        _plot_residuals_time(
+            resid, out_res_time, f"Resíduos no tempo – H={horizon} (t+1)"
+        )
+        _plot_residuals_hist(
+            resid, out_res_hist, f"Histograma de resíduos – H={horizon} (t+1)"
+        )
         resid_report = {
             "residuals_time_plot": str(out_res_time),
             "residuals_hist_plot": str(out_res_hist),
@@ -240,8 +288,12 @@ def evaluate(horizon: int, window: int, *, do_residuals: bool = True, do_walkfor
     if do_walkforward:
         wf = _walkforward_fixed_model(y_te, y_pred_te, scaler, close_idx)
         err_abs_t1 = np.array(wf["err_abs_t1"])
-        out_wf = plots_dir / f"walkforward_mae_t1_{settings.TICKER}_w{window}_h{horizon}.png"
-        _plot_walkforward(err_abs_t1, out_wf, f"Walk-forward (MAE t+1 por amostra) – H={horizon}")
+        out_wf = (
+            plots_dir / f"walkforward_mae_t1_{settings.TICKER}_w{window}_h{horizon}.png"
+        )
+        _plot_walkforward(
+            err_abs_t1, out_wf, f"Walk-forward (MAE t+1 por amostra) – H={horizon}"
+        )
         wf_report = {
             "walkforward_plot": str(out_wf),
             "summary": wf["summary"],
@@ -263,8 +315,13 @@ def evaluate(horizon: int, window: int, *, do_residuals: bool = True, do_walkfor
     }
 
     # Salva JSON
-    out_json = Path(settings.MODELS_DIR) / f"evaluation_report_{settings.TICKER}_w{window}_h{horizon}.json"
-    out_json.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    out_json = (
+        Path(settings.MODELS_DIR)
+        / f"evaluation_report_{settings.TICKER}_w{window}_h{horizon}.json"
+    )
+    out_json.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     logger.info("Relatório salvo em: {p}", p=str(out_json))
     logger.info("Plot salvo em: {p}", p=str(out_plot))
 
@@ -277,8 +334,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Avalia modelo LSTM para H=1 ou H=5.")
     parser.add_argument("--horizon", type=int, choices=[1, 5], required=True)
     parser.add_argument("--window", type=int, default=settings.WINDOW)
-    parser.add_argument("--no-residuals", action="store_true", help="não gerar gráficos de resíduos")
-    parser.add_argument("--no-walkforward", action="store_true", help="não rodar backtesting simples")
+    parser.add_argument(
+        "--no-residuals", action="store_true", help="não gerar gráficos de resíduos"
+    )
+    parser.add_argument(
+        "--no-walkforward", action="store_true", help="não rodar backtesting simples"
+    )
     args = parser.parse_args()
 
-    _ = evaluate(args.horizon, args.window, do_residuals=not args.no_residuals, do_walkforward=not args.no_walkforward)
+    _ = evaluate(
+        args.horizon,
+        args.window,
+        do_residuals=not args.no_residuals,
+        do_walkforward=not args.no_walkforward,
+    )

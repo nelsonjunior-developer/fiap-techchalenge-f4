@@ -1,5 +1,3 @@
-
-
 """
 Streamlit frontend para o Tech Challenge Fase 4.
 
@@ -15,6 +13,7 @@ Notas importantes:
 Execução local:
     streamlit run app.py
 """
+
 from __future__ import annotations
 
 import os
@@ -32,6 +31,18 @@ import yfinance as yf
 # ============================
 DEFAULT_API_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 st.set_page_config(page_title="Tech Challenge F4 – LSTM Forecast", layout="wide")
+
+# Mostrar detalhes de erros no cliente Streamlit (útil para debug)
+st.set_option("client.showErrorDetails", True)
+
+
+def _now() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log(msg: str) -> None:
+    """Log simples para stdout (aparece no terminal do Streamlit)."""
+    print(f"[app.py] {_now()} {msg}")
 
 
 # ============================
@@ -55,24 +66,50 @@ def _request(
         resp.raise_for_status()
         # Tenta JSON; se falhar, devolve texto bruto
         try:
+            log(f"HTTP {method} {url} -> {resp.status_code} in {latency:.3f}s")
             return resp.json(), latency, None
         except Exception:
             return {"raw": resp.text}, latency, None
     except Exception as exc:  # noqa: BLE001 – exibimos erro detalhado na UI
         latency = (datetime.now() - start).total_seconds()
+        log(f"HTTP {method} {url} FAILED in {latency:.3f}s: {exc}")
         return None, latency, str(exc)
 
 
 def api_health(api_url: str) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
-    return _request("GET", f"{api_url.rstrip('/')}/health")
+    url = f"{api_url.rstrip('/')}/health"
+    log(f"Calling {url}")
+    return _request("GET", url)
 
 
 def api_metadata(api_url: str) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
-    return _request("GET", f"{api_url.rstrip('/')}/metadata")
+    url = f"{api_url.rstrip('/')}/metadata"
+    log(f"Calling {url}")
+    return _request("GET", url)
 
 
-def api_predict(api_url: str, payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
-    return _request("POST", f"{api_url.rstrip('/')}/predict", json_payload=payload)
+def api_predict(
+    api_url: str, payload: Dict[str, Any]
+) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
+    url = f"{api_url.rstrip('/')}/predict"
+    log(f"Calling {url} with payload keys={list(payload.keys())}")
+    return _request("POST", url, json_payload=payload)
+
+
+def api_features_order(
+    api_url: str, horizon: int, window: int
+) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
+    url = f"{api_url.rstrip('/')}/features-order?horizon={horizon}&window={window}"
+    log(f"Calling {url}")
+    return _request("GET", url)
+
+
+def api_predict_ticker(
+    api_url: str, payload: Dict[str, Any]
+) -> Tuple[Optional[Dict[str, Any]], float, Optional[str]]:
+    url = f"{api_url.rstrip('/')}/predict-ticker"
+    log(f"Calling {url} with payload keys={list(payload.keys())}")
+    return _request("POST", url, json_payload=payload)
 
 
 # ============================
@@ -85,18 +122,33 @@ def fetch_history_yf(ticker: str, days_back: int = 400) -> pd.DataFrame:
     days_back: janela de histórico para exibir/usar (aprox.).
     Retorna DataFrame com colunas padrão do Yahoo (Open, High, Low, Close, Volume).
     """
-    end = datetime.now()
-    start = end - timedelta(days=days_back)
-    df = yf.download(ticker, start=start.date().isoformat(), end=end.date().isoformat(), interval="1d", auto_adjust=False)
-    if not isinstance(df, pd.DataFrame) or df.empty:
+    try:
+        end = datetime.now()
+        start = end - timedelta(days=days_back)
+        log(f"yfinance.download({ticker}, {start.date()} -> {end.date()}, interval=1d)")
+        df = yf.download(
+            ticker,
+            start=start.date().isoformat(),
+            end=end.date().isoformat(),
+            interval="1d",
+            auto_adjust=False,
+        )
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            log("yfinance returned empty DataFrame")
+            return pd.DataFrame()
+        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna().copy()
+        df.index = pd.to_datetime(df.index)
+        df.sort_index(inplace=True)
+        log(f"yfinance dataframe shape={df.shape}")
+        return df
+    except Exception as exc:
+        log(f"yfinance failed: {exc}")
         return pd.DataFrame()
-    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
-    df.index = pd.to_datetime(df.index)
-    df.sort_index(inplace=True)
-    return df
 
 
-def build_payload_from_df(df: pd.DataFrame, window: int, horizon: int, ticker: Optional[str] = None) -> Dict[str, Any]:
+def build_payload_from_df(
+    df: pd.DataFrame, window: int, horizon: int, ticker: Optional[str] = None
+) -> Dict[str, Any]:
     """Prepara um payload de previsão com base em um DataFrame OHLCV.
 
     Formato pensado para alinhar com o `schemas.py` do backend:
@@ -123,7 +175,11 @@ def build_payload_from_df(df: pd.DataFrame, window: int, horizon: int, ticker: O
         }
         for idx, row in tail.iterrows()
     ]
-    payload: Dict[str, Any] = {"horizon": int(horizon), "window": int(window), "history": records}
+    payload: Dict[str, Any] = {
+        "horizon": int(horizon),
+        "window": int(window),
+        "history": records,
+    }
     if ticker:
         payload["ticker"] = ticker
     return payload
@@ -133,30 +189,53 @@ def build_payload_from_df(df: pd.DataFrame, window: int, horizon: int, ticker: O
 # UI
 # ============================
 
+
 def sidebar_ui() -> Dict[str, Any]:
     st.sidebar.header("Configurações")
-    api_url = st.sidebar.text_input("API Base URL", value=DEFAULT_API_URL, help="Ex.: http://127.0.0.1:8000")
+    api_url = st.sidebar.text_input(
+        "API Base URL", value=DEFAULT_API_URL, help="Ex.: http://127.0.0.1:8000"
+    )
 
     st.sidebar.markdown("---")
     input_mode = st.sidebar.radio(
         "Entrada de dados",
-        options=("Ticker (API busca)", "Ticker (app busca via yfinance)", "Upload CSV"),
+        options=(
+            "Ticker (API busca)",
+            "Ticker (app busca via yfinance)",
+            "Vetor de Features (JSON)",
+        ),
         index=0,
         help=(
             "Formas de obter o histórico recente: \n"
             "• API busca: o backend coleta os dados do ticker. \n"
-            "• App busca: este app usa yfinance e envia o histórico para a API. \n"
-            "• Upload: você fornece um CSV com colunas Open,High,Low,Close,Volume e Date opcional."
+            "• App busca: este app usa yfinance e envia parâmetros equivalentes. \n"
+            "• Vetor JSON: você fornece `recent_features` (lista de listas)."
         ),
     )
 
     ticker = st.sidebar.text_input("Ticker", value="AMZN")
-    horizon = st.sidebar.select_slider("Horizon (passos à frente)", options=[1, 5], value=5)
-    window = st.sidebar.slider("Window (tamanho da janela)", min_value=30, max_value=180, value=60, step=5)
+    horizon = st.sidebar.select_slider(
+        "Horizon (passos à frente)", options=[1, 5], value=5
+    )
+    window = st.sidebar.slider(
+        "Window (tamanho da janela)", min_value=30, max_value=180, value=60, step=5
+    )
+    lookback = st.sidebar.slider(
+        "Lookback (dias)",
+        min_value=60,
+        max_value=365,
+        value=180,
+        step=30,
+        help="Usado pelos modos de ticker (/predict-ticker).",
+    )
 
     st.sidebar.markdown("---")
     health_btn = st.sidebar.button("Testar /health")
     meta_btn = st.sidebar.button("Ver /metadata")
+
+    log(
+        f"sidebar: api_url={api_url} mode={input_mode} ticker={ticker} H={horizon} W={window} lookback={lookback}"
+    )
 
     return {
         "api_url": api_url,
@@ -164,6 +243,7 @@ def sidebar_ui() -> Dict[str, Any]:
         "ticker": ticker,
         "horizon": horizon,
         "window": window,
+        "lookback": lookback,
         "health_btn": health_btn,
         "meta_btn": meta_btn,
     }
@@ -199,6 +279,7 @@ def main() -> None:
     )
 
     cfg = sidebar_ui()
+    log("main: loaded sidebar config")
     api_url = cfg["api_url"]
 
     # Bloco opcional: ações rápidas /health e /metadata
@@ -215,74 +296,100 @@ def main() -> None:
         st.write(
             "O backend fará a coleta do histórico. Informe somente os parâmetros de janela e horizonte."
         )
-        payload = {"ticker": cfg["ticker"], "window": int(cfg["window"]), "horizon": int(cfg["horizon"]) }
+        payload = {
+            "ticker": cfg["ticker"],
+            "window": int(cfg["window"]),
+            "horizon": int(cfg["horizon"]),
+            "lookback_days": int(cfg["lookback"]),
+        }
+        log(f"prepared payload for /predict-ticker: {json.dumps(payload)[:200]}...")
 
     elif cfg["input_mode"] == "Ticker (app busca via yfinance)":
         st.write(
             "Este app coletará o histórico via yfinance e enviará os últimos `window` pontos para a API."
         )
         with st.spinner("Baixando dados..."):
-            history_df = fetch_history_yf(cfg["ticker"], days_back=max(cfg["window"] * 3, 180))
+            history_df = fetch_history_yf(
+                cfg["ticker"], days_back=max(cfg["window"] * 3, int(cfg["lookback"]))
+            )
         if history_df is None or history_df.empty:
-            st.warning("Não foi possível obter dados via yfinance. Tente novamente ou altere o ticker.")
+            st.warning(
+                "Não foi possível obter dados via yfinance. Tente novamente ou altere o ticker."
+            )
         else:
             st.success(f"Histórico carregado: {len(history_df)} linhas")
             st.line_chart(history_df["Close"], height=220)
-            payload = build_payload_from_df(history_df, window=cfg["window"], horizon=cfg["horizon"], ticker=cfg["ticker"])
+            log(f"history_df loaded via yfinance: rows={len(history_df)}")
+            # Observação: para manter compatibilidade com o backend, enviaremos para /predict-ticker,
+            # que calcula as features no servidor. O histórico baixado aqui é apenas para visualização.
+            payload = {
+                "ticker": cfg["ticker"],
+                "window": int(cfg["window"]),
+                "horizon": int(cfg["horizon"]),
+                "lookback_days": int(cfg["lookback"]),
+            }
 
-    else:  # Upload CSV
+    else:  # Vetor de Features (JSON)
         st.write(
-            "Faça upload de um CSV com colunas: Open,High,Low,Close,Volume e opcionalmente Date." \
-            " Usaremos os últimos `window` registros."
+            "Forneça um JSON com `recent_features` no formato lista de listas (shape `window × n_features`). "
+            "A ordem exata das features pode ser consultada em `/features-order`."
         )
-        up = st.file_uploader("CSV com histórico OHLCV", type=["csv"])
-        if up is not None:
+        meta, _, _ = api_features_order(api_url, cfg["horizon"], cfg["window"])
+        if meta:
+            log(f"/features-order returned n_features={meta.get('n_features')}")
+            st.caption(
+                f"Ordem de treino (n={meta.get('n_features')}): {meta.get('features')}"
+            )
+        txt = st.text_area("Cole aqui o JSON de `recent_features` (lista de listas).")
+        if txt.strip():
             try:
-                df = pd.read_csv(up)
-                # Normaliza nomes de colunas esperadas
-                cols_map = {c.lower(): c for c in df.columns}
-                required = ["open", "high", "low", "close", "volume"]
-                if not all(c in cols_map for c in required):
-                    st.error("CSV deve conter colunas: Open, High, Low, Close, Volume")
+                rf = json.loads(txt)
+                if isinstance(rf, list):
+                    payload = {
+                        "horizon": int(cfg["horizon"]),
+                        "window": int(cfg["window"]),
+                        "recent_features": rf,
+                    }
+                    log(
+                        f"prepared payload for /predict (JSON mode) with window={cfg['window']}"
+                    )
                 else:
-                    # Ajusta índice de datas se existir
-                    if "date" in cols_map:
-                        df[cols_map["date"]] = pd.to_datetime(df[cols_map["date"]])
-                        df.set_index(cols_map["date"], inplace=True)
-                    df.rename(columns={
-                        cols_map["open"]: "Open",
-                        cols_map["high"]: "High",
-                        cols_map["low"]: "Low",
-                        cols_map["close"]: "Close",
-                        cols_map["volume"]: "Volume",
-                    }, inplace=True)
-                    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-                    history_df = df.sort_index()
-                    st.line_chart(history_df["Close"], height=220)
-                    payload = build_payload_from_df(history_df, window=cfg["window"], horizon=cfg["horizon"], ticker=cfg["ticker"])
-            except Exception as exc:  # noqa: BLE001 – mostrar erro amigável
-                st.error(f"Falha ao ler CSV: {exc}")
+                    st.error(
+                        "JSON inválido: esperado uma lista de listas (recent_features)."
+                    )
+            except Exception as exc:
+                st.error(f"Falha ao interpretar JSON: {exc}")
 
     # Botão de previsão
     predict_col, payload_col = st.columns([1, 1])
     with payload_col:
         st.subheader("Payload que será enviado")
         if payload is not None:
-            st.code(json.dumps(payload, indent=2)[:2000], language="json")  # limita tamanho na UI
+            st.code(
+                json.dumps(payload, indent=2)[:2000], language="json"
+            )  # limita tamanho na UI
         else:
             st.info("Aguardando dados para montar o payload…")
 
     with predict_col:
         st.subheader("Executar previsão")
-        run = st.button("/predict", type="primary", use_container_width=True)
+        btn_label = (
+            "/predict-ticker" if cfg["input_mode"].startswith("Ticker") else "/predict"
+        )
+        run = st.button(btn_label, type="primary", use_container_width=True)
         if run:
             if payload is None:
-                st.warning("Necessário montar o payload antes de chamar /predict.")
+                st.warning(f"Necessário montar o payload antes de chamar {btn_label}.")
             else:
-                with st.spinner("Chamando API /predict…"):
-                    data, lat, err = api_predict(api_url, payload)
+                use_ticker = cfg["input_mode"].startswith("Ticker")
+                with st.spinner(f"Chamando API {btn_label}…"):
+                    if use_ticker:
+                        data, lat, err = api_predict_ticker(api_url, payload)
+                    else:
+                        data, lat, err = api_predict(api_url, payload)
+                log(f"response from {btn_label}: error={bool(err)} latency={lat:.3f}s")
                 if err:
-                    st.error(f"Falha no /predict ({lat:.3f}s): {err}")
+                    st.error(f"Falha no {btn_label} ({lat:.3f}s): {err}")
                 elif not data:
                     st.warning(f"Resposta vazia do backend ({lat:.3f}s)")
                 else:
@@ -299,15 +406,29 @@ def main() -> None:
                     preds = data.get("predictions") if isinstance(data, dict) else None
                     if isinstance(preds, list) and preds:
                         last_date_str = data.get("last_date")
-                        if last_date_str is None and history_df is not None and not history_df.empty:
+                        if (
+                            last_date_str is None
+                            and history_df is not None
+                            and not history_df.empty
+                        ):
                             last_date_str = history_df.index.max().strftime("%Y-%m-%d")
                         # Cria índice de datas futuras (útil para visualização)
                         try:
-                            base_date = pd.to_datetime(last_date_str) if last_date_str else pd.Timestamp.today()
+                            base_date = (
+                                pd.to_datetime(last_date_str)
+                                if last_date_str
+                                else pd.Timestamp.today()
+                            )
                         except Exception:
                             base_date = pd.Timestamp.today()
-                        future_idx = pd.date_range(base_date + pd.Timedelta(days=1), periods=len(preds), freq="D")
-                        df_pred = pd.DataFrame({"PredictedClose": preds}, index=future_idx)
+                        future_idx = pd.date_range(
+                            base_date + pd.Timedelta(days=1),
+                            periods=len(preds),
+                            freq="D",
+                        )
+                        df_pred = pd.DataFrame(
+                            {"PredictedClose": preds}, index=future_idx
+                        )
 
                         st.subheader("Tabela de Previsões")
                         st.dataframe(df_pred, use_container_width=True)
@@ -315,7 +436,14 @@ def main() -> None:
                         if history_df is not None and not history_df.empty:
                             st.subheader("Histórico (Close) + Previsões")
                             # Concatenamos para um chart único
-                            plot_df = pd.concat([history_df[["Close"]].rename(columns={"Close": "Close"}).tail(200), df_pred.rename(columns={"PredictedClose": "Close"})])
+                            plot_df = pd.concat(
+                                [
+                                    history_df[["Close"]]
+                                    .rename(columns={"Close": "Close"})
+                                    .tail(200),
+                                    df_pred.rename(columns={"PredictedClose": "Close"}),
+                                ]
+                            )
                             st.line_chart(plot_df["Close"], height=300)
 
 
@@ -325,6 +453,9 @@ if __name__ == "__main__":
     api_url = DEFAULT_API_URL
     health, lat, err = api_health(api_url)
     if err:
-        print(f"[app.py] /health erro ({lat:.3f}s): {err}")
+        log(f"/health erro ({lat:.3f}s): {err}")
     else:
-        print(f"[app.py] /health ok ({lat:.3f}s): {health}")
+        log(f"/health ok ({lat:.3f}s): {health}")
+
+    # Renderiza a UI quando executado via `streamlit run app.py`
+    main()

@@ -1,5 +1,3 @@
-
-
 """
 Treino dos modelos LSTM (H=1 e H=5) – Tech Challenge F4
 
@@ -11,6 +9,7 @@ Fluxo:
 5) Baseline ingênuo (persistência: repete o último Close da janela).
 6) Salva modelo (models/model_h{H}.h5) e registra métricas em models/metadata.json.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,7 +46,10 @@ class EvalResult:
 # Utilitários de dados
 # -----------------------------
 
-def _load_npz(kind: str, ticker: str, window: int, horizon: int) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+
+def _load_npz(
+    kind: str, ticker: str, window: int, horizon: int
+) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """Carrega X,y,features de um .npz em data/processed."""
     suffix = f"{ticker.upper()}_w{window}_h{horizon}"
     path = Path(settings.PROCESSED_DIR) / f"{kind}_{suffix}.npz"
@@ -63,7 +65,10 @@ def _inverse_close(arr_scaled: np.ndarray, scaler, close_idx: int) -> np.ndarray
         return arr_scaled * scaler.scale_[close_idx] + scaler.mean_[close_idx]
     # MinMaxScaler
     if hasattr(scaler, "data_min_") and hasattr(scaler, "data_max_"):
-        return arr_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx]) + scaler.data_min_[close_idx]
+        return (
+            arr_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx])
+            + scaler.data_min_[close_idx]
+        )
     return arr_scaled  # fallback
 
 
@@ -80,7 +85,9 @@ def _evaluate_on_original_scale(
     return EvalResult(mae=mae, rmse=rmse, mape=mape)
 
 
-def _naive_persistence_from_X(X: np.ndarray, close_idx: int, horizon: int) -> np.ndarray:
+def _naive_persistence_from_X(
+    X: np.ndarray, close_idx: int, horizon: int
+) -> np.ndarray:
     """Baseline ingênuo (persistência): futuros (t+1..t+H) = último Close observado (escala do scaler)."""
     last_close = X[:, -1, close_idx]  # (n,)
     return np.repeat(last_close.reshape(-1, 1), horizon, axis=1)  # (n,H)
@@ -89,6 +96,7 @@ def _naive_persistence_from_X(X: np.ndarray, close_idx: int, horizon: int) -> np
 # -----------------------------
 # Treino
 # -----------------------------
+
 
 def train_once(
     horizon: int,
@@ -108,12 +116,16 @@ def train_once(
 
     assert f_tr == f_va == f_te, "Lista/ordem de features divergente entre splits"
     feature_names = f_tr
-    assert "Close" in feature_names, "Feature 'Close' ausente; necessária para métricas e baseline."
+    assert (
+        "Close" in feature_names
+    ), "Feature 'Close' ausente; necessária para métricas e baseline."
     close_idx = feature_names.index("Close")
 
     # Modelo
     n_features = X_tr.shape[-1]
-    model = build_lstm_model(window, n_features, horizon, units=units, dropout=dropout, lr=lr)
+    model = build_lstm_model(
+        window, n_features, horizon, units=units, dropout=dropout, lr=lr
+    )
 
     history = model.fit(
         X_tr,
@@ -139,7 +151,9 @@ def train_once(
     res_base = _evaluate_on_original_scale(y_te, y_base_te, scaler, close_idx)
 
     # Persistência do modelo
-    out_path = Path(settings.MODELS_DIR) / ("model_h1.h5" if horizon == 1 else "model_h5.h5")
+    out_path = Path(settings.MODELS_DIR) / (
+        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+    )
     Path(settings.MODELS_DIR).mkdir(parents=True, exist_ok=True)
     model.save(out_path)
     logger.info(
@@ -167,11 +181,17 @@ def _write_metadata(metadata: Dict):
     """Atualiza (ou cria) models/metadata.json mesclando com conteúdo existente."""
     meta_path = Path(settings.MODELS_DIR) / "metadata.json"
     try:
-        current = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+        current = (
+            json.loads(meta_path.read_text(encoding="utf-8"))
+            if meta_path.exists()
+            else {}
+        )
     except Exception:
         current = {}
     current.update(metadata)
-    meta_path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     logger.info("metadata.json atualizado: {p}", p=str(meta_path))
 
 

@@ -12,6 +12,7 @@ Observações:
 - Este módulo **não** faz janelamento (fica em `features.py`).
 - Valores padrão vêm de `src.utils.config.settings` e podem ser sobrescritos via `.env`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ class SplitResult:
 # ==============================
 # Ingestão e limpeza
 # ==============================
+
 
 def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garante colunas simples ['Open','High','Low','Close','Volume'].
@@ -130,7 +132,9 @@ def _download_with_retries(
             repair=True,
         )
         if isinstance(df, pd.DataFrame) and not df.empty:
-            cols = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
+            cols = [
+                c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns
+            ]
             if cols:
                 return df[cols].copy()
     except Exception as e:
@@ -152,10 +156,14 @@ def _download_with_retries(
                 df = df[df.index >= pd.to_datetime(start)]
             if end:
                 df = df[df.index <= pd.to_datetime(end)]
-            cols = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
+            cols = [
+                c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns
+            ]
             if cols and not df.empty:
                 return df[cols].copy()
-            logger.error("Fallback period='max' retornou vazio após recorte ou sem colunas OHLCV.")
+            logger.error(
+                "Fallback period='max' retornou vazio após recorte ou sem colunas OHLCV."
+            )
     except Exception as e:
         logger.error(f"Fallback history(period='max') falhou: {e}")
 
@@ -183,7 +191,9 @@ def fetch_ohlcv_yf(
     """
     interval = (interval or "1d").lower()  # yfinance espera lowercase
     if interval not in {"1d", "1wk", "1mo"}:
-        logger.warning(f"Intervalo '{interval}' não suportado para fallback robusto; forçando '1d'.")
+        logger.warning(
+            f"Intervalo '{interval}' não suportado para fallback robusto; forçando '1d'."
+        )
         interval = "1d"
     logger.info(
         f"Baixando dados: ticker={ticker}, start={start}, end={end}, interval={interval}"
@@ -262,6 +272,7 @@ def winsorize_iqr(
 # Persistência de arquivos
 # ==============================
 
+
 def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
@@ -310,12 +321,15 @@ def temporal_split(
     return SplitResult(train=train, val=val, test=test)
 
 
-def save_processed_splits(splits: SplitResult, out_dir: Path, ticker: str) -> Tuple[Path, Path, Path]:
+def save_processed_splits(
+    splits: SplitResult, out_dir: Path, ticker: str
+) -> Tuple[Path, Path, Path]:
     """Salva splits processados em CSVs nomeados por partição.
 
     Retorna as paths (train, val, test).
     """
     _ensure_dir(out_dir)
+
     def _name(part: str, df: pd.DataFrame) -> Path:
         start = df.index.min().strftime("%Y-%m-%d") if not df.empty else "NA"
         end = df.index.max().strftime("%Y-%m-%d") if not df.empty else "NA"
@@ -336,6 +350,7 @@ def save_processed_splits(splits: SplitResult, out_dir: Path, ticker: str) -> Tu
 # ==============================
 # Orquestração: download + limpeza + split + salvamento
 # ==============================
+
 
 def download_prepare_and_save(
     ticker: str = settings.TICKER,
@@ -382,7 +397,9 @@ if __name__ == "__main__":
         description="Baixa e prepara OHLCV via yfinance (salva raw e splits)."
     )
     parser.add_argument("--ticker", default=settings.TICKER, help="Ticker (ex.: AMZN)")
-    parser.add_argument("--start", default=settings.START_DATE, help="Data inicial YYYY-MM-DD")
+    parser.add_argument(
+        "--start", default=settings.START_DATE, help="Data inicial YYYY-MM-DD"
+    )
     parser.add_argument("--end", default=None, help="Data final YYYY-MM-DD (opcional)")
     parser.add_argument(
         "--no-winsorize",
