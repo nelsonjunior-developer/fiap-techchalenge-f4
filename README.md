@@ -579,6 +579,19 @@ scrape_configs:
 
 > Para Grafana, importe os dashboards do diretório `monitoring/dashboards/` (opcional) e ajuste a datasource para o seu Prometheus.
 
+### Grafana (provisioning automático)
+- Suba a stack: `make compose-up`
+- Acesse Grafana: http://localhost:3000 (ou porta configurada). Login padrão: admin / admin (pode ser mudado por .env).
+- O datasource Prometheus é carregado automaticamente.
+- Dashboards: abra a pasta **TechChallenge** e o dashboard **API Observability — Tech Challenge**.
+
+Se a porta 3000 estiver ocupada, edite `docker/docker-compose.yml` (serviço grafana) e use `3001:3000`.
+
+**Painéis do dashboard (API Observability — Tech Challenge)**
+- Requests rate por rota/status (req/s): `rate(http_requests_total[1m])` agregado por `endpoint` e `http_status`. Mostra volume de tráfego por rota e código de resposta; útil para detectar picos de carga ou erros.
+- Latência p95 (s): `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))` por `endpoint`. Indica a latência no percentil 95 de cada rota; monitore regressões de desempenho.
+- Inferências por horizonte (req/s): `rate(http_requests_total{endpoint=~"/predict.*"}[1m])` agregado por `endpoint` (ou por `horizon` se a métrica customizada existir). Acompanha volume de chamadas de previsão, separando /predict e /predict-ticker.
+
 ---
 
 ## Troubleshooting
