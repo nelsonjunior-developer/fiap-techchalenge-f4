@@ -49,6 +49,17 @@ jobs:
           LOG_JSON: "false"
         run: |
           . .venv/bin/activate
-          uvicorn api.main:app --host 127.0.0.1 --port 8000 &
-          sleep 2
-          curl -sSf http://127.0.0.1:8000/health
+          uvicorn api.main:app --host 127.0.0.1 --port 8000 --log-level warning &
+          UV_PID=$!
+          for i in $(seq 1 10); do
+            if curl -sSf http://127.0.0.1:8000/health; then
+              SUCCESS=1
+              break
+            fi
+            sleep 2
+          done
+          kill $UV_PID || true
+          if [ "${SUCCESS:-0}" != "1" ]; then
+            echo "Healthcheck failed"
+            exit 1
+          fi
