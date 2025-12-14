@@ -352,7 +352,7 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
     )
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
 
