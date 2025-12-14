@@ -1,5 +1,22 @@
 # fiap-techchalenge-f4
 
+## Arquitetura (visão geral)
+
+A figura abaixo resume o fluxo ponta‑a‑ponta do projeto.
+
+```mermaid
+flowchart LR
+  Y[yfinance] --> D[data/raw]
+  D --> P[src.data + src.features]
+  P --> NPZ[data/processed npz]
+  NPZ --> T[src.train]
+  T --> M((models: h5, scaler, metadata))
+  M --> A[FastAPI]
+  A -->|/metrics| PR[Prometheus]
+  PR --> G[Grafana]
+  A --> S[Streamlit app]
+  S --> A
+```
 
 ## Estrutura do Projeto
 
@@ -592,7 +609,76 @@ Se a porta 3000 estiver ocupada, edite `docker/docker-compose.yml` (serviço gra
 - Latência p95 (s): `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))` por `endpoint`. Indica a latência no percentil 95 de cada rota; monitore regressões de desempenho.
 - Inferências por horizonte (req/s): `rate(http_requests_total{endpoint=~"/predict.*"}[1m])` agregado por `endpoint` (ou por `horizon` se a métrica customizada existir). Acompanha volume de chamadas de previsão, separando /predict e /predict-ticker.
 
+### Gerando tráfego de exemplo (preencher painéis)
+
+Para que os gráficos tenham dados, gere algumas requisições à API (em paralelo ou por alguns minutos):
+
+```bash
+# 1) Smoke básico
+make smoke
+
+# 2) Tráfego contínuo de /health (gera série estável de requests)
+for i in $(seq 1 100); do curl -s http://127.0.0.1:8000/health > /dev/null; sleep 0.2; done
+
+# 3) Inferências H=1 e H=5 pelo endpoint "inteligente" (baixa dados e calcula features)
+for i in $(seq 1 30); do
+  curl -s -X POST http://127.0.0.1:8000/predict-ticker \
+    -H "Content-Type: application/json" \
+    -d '{"horizon":1,"window":60,"ticker":"AMZN","lookback_days":180}' > /dev/null
+  sleep 0.3
+done
+
+for i in $(seq 1 30); do
+  curl -s -X POST http://127.0.0.1:8000/predict-ticker \
+    -H "Content-Type: application/json" \
+    -d '{"horizon":5,"window":60,"ticker":"AMZN","lookback_days":180}' > /dev/null
+  sleep 0.3
+done
+
+```
+
+> Dica: rode em paralelo com `&` ou múltiplos terminais para ver as curvas se formarem no Grafana (janela de tempo: "Last 15 minutes" ajuda).
+
+### Validando no Prometheus (opcional)
+
+Abra o Prometheus (por padrão no Compose: `http://localhost:9090`) e execute as consultas abaixo para conferir se as séries estão sendo coletadas:
+
+- **Taxa de requisições por rota/status (req/s):**
+  ```
+  sum by (endpoint, http_status) (rate(http_requests_total[1m]))
+  ```
+- **Latência p95 por rota (segundos):**
+  ```
+  histogram_quantile(
+    0.95,
+    sum by (endpoint, le) (rate(http_request_duration_seconds_bucket[5m]))
+  )
+  ```
+- **Apenas inferências (/predict e /predict-ticker):**
+  ```
+  sum(rate(http_requests_total{endpoint=~"/predict.*"}[1m]))
+  ```
+
+Se as consultas retornarem valores, os painéis no Grafana também devem popular (após alguns segundos).
+
+### Como interpretar os gráficos (Grafana)
+
+- **Requests rate por rota/status (req/s):** volume de tráfego por rota.  
+  - Zeros sustentados indicam ausência de tráfego (gere novas requisições).  
+  - A presença de linhas com `http_status != 200` indica erros por rota; investigue logs (`make api-dev`) ou o **Explore** do Grafana.
+
+- **Latência p95 (s):** tempo de resposta no percentil 95.  
+  - Picos curtos durante “rajadas” são normais; picos persistentes sugerem gargalo (ex.: CPU/TF, I/O de rede para download de dados, serialização JSON).  
+  - Como guia, p95 &lt; 100 ms para /health e /metrics é saudável; /predict-ticker pode ter p95 maior devido ao pré-processamento.
+
+- **Inferências por horizonte (req/s):** separa o volume entre `/predict` (features prontas) e `/predict-ticker` (pipelines internos).  
+  - Ajuda a entender o perfil de uso do frontend/consumidores e o impacto de carga do pipeline de features.
+
 ---
+
+
+
+> No modo Docker Compose, **API**, **Prometheus** e **Grafana** compartilham a mesma rede interna; o Grafana já vem provisionado com a datasource Prometheus e o dashboard “API Observability — Tech Challenge”.
 
 ## Troubleshooting
 
