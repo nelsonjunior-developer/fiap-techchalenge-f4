@@ -12,6 +12,7 @@ Design:
 - Evitamos vazamento temporal: scaler é ajustado **só** no treino.
 - Compatível com H=1 (baseline) e H=5 (multi-saída) – controlado por parâmetro.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -183,7 +184,11 @@ def make_windows(
         logger.warning(
             f"Janelamento resultou em zero amostras (n={n}, window={window}). Retornando arrays vazios."
         )
-        return WindowedArrays(X=np.empty((0, window, n_feats)), y=np.empty((0, horizon)), feature_names=list(feature_cols))
+        return WindowedArrays(
+            X=np.empty((0, window, n_feats)),
+            y=np.empty((0, horizon)),
+            feature_names=list(feature_cols),
+        )
 
     X = np.zeros((samples, window, n_feats), dtype=float)
     for i in range(samples):
@@ -248,10 +253,19 @@ def build_features_and_windows(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Gera features + janelas a partir de CSVs processados.")
+    parser = argparse.ArgumentParser(
+        description="Gera features + janelas a partir de CSVs processados."
+    )
     parser.add_argument("--ticker", default=settings.TICKER, help="Ticker (ex.: AMZN)")
-    parser.add_argument("--window", type=int, default=settings.WINDOW, help="Tamanho da janela (ex.: 60)")
-    parser.add_argument("--horizon", type=int, default=settings.H, help="Horizonte (1 ou 5)")
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=settings.WINDOW,
+        help="Tamanho da janela (ex.: 60)",
+    )
+    parser.add_argument(
+        "--horizon", type=int, default=settings.H, help="Horizonte (1 ou 5)"
+    )
     parser.add_argument(
         "--outdir",
         default=str(settings.PROCESSED_DIR),
@@ -266,7 +280,9 @@ if __name__ == "__main__":
     val_path = sorted(base.glob(f"{args.ticker.upper()}_val_*.csv"))
     test_path = sorted(base.glob(f"{args.ticker.upper()}_test_*.csv"))
     if not (train_path and val_path and test_path):
-        raise SystemExit("Não foram encontrados CSVs processados. Rode primeiro: python -m src.data ...")
+        raise SystemExit(
+            "Não foram encontrados CSVs processados. Rode primeiro: python -m src.data ..."
+        )
     train_csv, val_csv, test_csv = train_path[-1], val_path[-1], test_path[-1]
 
     # Carrega
@@ -293,9 +309,24 @@ if __name__ == "__main__":
     outdir.mkdir(parents=True, exist_ok=True)
     suffix = f"{args.ticker.upper()}_w{args.window}_h{args.horizon}"
 
-    np.savez_compressed(outdir / f"train_{suffix}.npz", X=tr.X, y=tr.y, features=np.array(tr.feature_names, dtype=object))
-    np.savez_compressed(outdir / f"val_{suffix}.npz", X=va.X, y=va.y, features=np.array(va.feature_names, dtype=object))
-    np.savez_compressed(outdir / f"test_{suffix}.npz", X=te.X, y=te.y, features=np.array(te.feature_names, dtype=object))
+    np.savez_compressed(
+        outdir / f"train_{suffix}.npz",
+        X=tr.X,
+        y=tr.y,
+        features=np.array(tr.feature_names, dtype=object),
+    )
+    np.savez_compressed(
+        outdir / f"val_{suffix}.npz",
+        X=va.X,
+        y=va.y,
+        features=np.array(va.feature_names, dtype=object),
+    )
+    np.savez_compressed(
+        outdir / f"test_{suffix}.npz",
+        X=te.X,
+        y=te.y,
+        features=np.array(te.feature_names, dtype=object),
+    )
 
     logger.info(
         "Arrays salvos em {outdir} com sufixo {suffix}",

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Monitoramento e métricas Prometheus para a API FastAPI.
 
@@ -19,17 +17,19 @@ Como usar em `api/main.py`:
 Observação: usamos um `CollectorRegistry` próprio para exportar somente métricas da aplicação.
 """
 
+from __future__ import annotations
+
 import time
 from typing import Awaitable, Callable
 
 from fastapi import Request, Response
 from fastapi.responses import PlainTextResponse
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
     Counter,
     Histogram,
-    CollectorRegistry,
     generate_latest,
-    CONTENT_TYPE_LATEST,
 )
 
 # -----------------------------------------------------------------------------
@@ -59,6 +59,7 @@ HTTP_LATENCY: Histogram = Histogram(
 # Middleware de latência/contagem
 # -----------------------------------------------------------------------------
 
+
 async def prometheus_middleware(
     request: Request,
     call_next: Callable[[Request], Awaitable[Response]],
@@ -86,9 +87,11 @@ async def prometheus_middleware(
         )
         return response
 
+
 # -----------------------------------------------------------------------------
 # Endpoint /metrics
 # -----------------------------------------------------------------------------
+
 
 def metrics_endpoint() -> PlainTextResponse:
     """

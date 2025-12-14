@@ -1,5 +1,3 @@
-
-
 """
 Arquiteturas LSTM (Keras) para previsão de série temporal – Tech Challenge F4
 
@@ -12,6 +10,7 @@ Decisões de design (sucintas):
 - Hiperparâmetros (units, dropout, lr) são configuráveis pelo `src/train.py`.
 - `default_callbacks()` provê EarlyStopping e ReduceLROnPlateau para estabilidade.
 """
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -75,7 +74,9 @@ def build_lstm_model(
     return model
 
 
-def default_callbacks(patience_es: int = 10, patience_rlr: int = 5) -> Tuple[callbacks.Callback, ...]:
+def default_callbacks(
+    patience_es: int = 10, patience_rlr: int = 5
+) -> Tuple[callbacks.Callback, ...]:
     """Callbacks padrão para treino estável.
 
     - EarlyStopping: para quando `val_loss` não melhora, restaurando os melhores pesos.

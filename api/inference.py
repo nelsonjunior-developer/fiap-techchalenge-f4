@@ -13,6 +13,7 @@ Responsável por:
 Obs.: Mantemos a engenharia de features aqui (lado servidor) para o endpoint
 `POST /predict-ticker`, evitando divergências de ordem/escala no cliente.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,6 +29,7 @@ from loguru import logger
 # =============================
 # Indicadores técnicos auxiliares
 # =============================
+
 
 def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
     """RSI (Wilder). Implementação estável e sucinta.
@@ -47,7 +49,9 @@ def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return rsi.fillna(50.0)
 
 
-def _macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def _macd(
+    series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """MACD clássico (EMAs 12/26, sinal 9)."""
     ema_fast = series.ewm(span=fast, adjust=False).mean()
     ema_slow = series.ewm(span=slow, adjust=False).mean()
@@ -61,7 +65,10 @@ def _macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) ->
 # Leitura da ordem oficial de features
 # ==================================
 
-def _load_features_order_from_npz(processed_dir: str, ticker: str, window: int, horizon: int) -> List[str]:
+
+def _load_features_order_from_npz(
+    processed_dir: str, ticker: str, window: int, horizon: int
+) -> List[str]:
     """Carrega a ordem oficial das features a partir de `data/processed/*_TICKER_w{w}_h{h}.npz`.
 
     Estratégia: tenta train -> val -> test. Lança erros informativos se não encontrar.
@@ -86,6 +93,7 @@ def _load_features_order_from_npz(processed_dir: str, ticker: str, window: int, 
 # Ingestão yfinance + engenharia
 # ===============================
 
+
 def _download_ohlcv(ticker: str, lookback_days: int) -> pd.DataFrame:
     """Baixa OHLCV diário recente com yfinance (auto_adjust=True).
 
@@ -98,7 +106,9 @@ def _download_ohlcv(ticker: str, lookback_days: int) -> pd.DataFrame:
         raise RuntimeError(f"Falha no yfinance para {ticker}: {e}")
 
     if df is None or df.empty:
-        raise RuntimeError(f"yfinance retornou vazio para {ticker} (period={lookback_days}d).")
+        raise RuntimeError(
+            f"yfinance retornou vazio para {ticker} (period={lookback_days}d)."
+        )
 
     cols = ["Open", "High", "Low", "Close", "Volume"]
     missing = [c for c in cols if c not in df.columns]
@@ -136,7 +146,9 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _align_and_cut_window(df_feat: pd.DataFrame, features_order: List[str], window: int) -> pd.DataFrame:
+def _align_and_cut_window(
+    df_feat: pd.DataFrame, features_order: List[str], window: int
+) -> pd.DataFrame:
     """Reordena colunas para `features_order`, remove NaNs e recorta as últimas `window` linhas."""
     df_feat = df_feat.copy()
     df_feat = df_feat[features_order]
@@ -152,6 +164,7 @@ def _align_and_cut_window(df_feat: pd.DataFrame, features_order: List[str], wind
 # ======================================
 # Função principal usada pelo endpoint
 # ======================================
+
 
 def prepare_window_for_model(
     ticker: str,
@@ -190,7 +203,9 @@ def prepare_window_for_model(
         X_scaled = scaler.transform(X_in)
     except Exception:
         # Alguns scalers esperam (n_samples, n_features). Aplicamos por linha.
-        X_scaled = np.vstack([scaler.transform(X_in[i : i + 1, :]) for i in range(X_in.shape[0])])
+        X_scaled = np.vstack(
+            [scaler.transform(X_in[i : i + 1, :]) for i in range(X_in.shape[0])]
+        )
 
     X_model = X_scaled[np.newaxis, :, :]  # (1, window, n_features)
 

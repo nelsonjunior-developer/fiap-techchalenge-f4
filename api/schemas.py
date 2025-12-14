@@ -8,6 +8,7 @@ Observações:
 - `PredictRequest` (modo features prontas) espera matriz [window, n_features] na MESMA ORDEM do treino.
 - `PredictTickerRequest` abstrai a engenharia de features no servidor.
 """
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -38,11 +39,20 @@ class PredictRequest(BaseModel):
                 "horizon": 5,
                 "window": 60,
                 "features_order": [
-                    "Open", "High", "Low", "Close", "Volume",
-                    "ret1", "logret1", "vol20", "rsi14", "macd",
-                    "macd_signal", "macd_hist"
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume",
+                    "ret1",
+                    "logret1",
+                    "vol20",
+                    "rsi14",
+                    "macd",
+                    "macd_signal",
+                    "macd_hist",
                 ],
-                "recent_features": [[0.0] * 12] * 60
+                "recent_features": [[0.0] * 12] * 60,
             }
         }
 
@@ -68,7 +78,9 @@ class PredictTickerRequest(BaseModel):
     horizon: int = Field(..., description="H=1 ou H=5")
     window: Optional[int] = Field(None, description="Janela (default do settings)")
     ticker: Optional[str] = Field(None, description="Ticker (default settings.TICKER)")
-    lookback_days: int = Field(180, ge=60, description="Histórico para estabilizar indicadores")
+    lookback_days: int = Field(
+        180, ge=60, description="Histórico para estabilizar indicadores"
+    )
 
     class Config:
         json_schema_extra = {
@@ -76,6 +88,6 @@ class PredictTickerRequest(BaseModel):
                 "horizon": 5,
                 "window": 60,
                 "ticker": "AMZN",
-                "lookback_days": 180
+                "lookback_days": 180,
             }
         }

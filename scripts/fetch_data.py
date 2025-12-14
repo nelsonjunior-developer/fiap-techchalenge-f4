@@ -14,6 +14,7 @@ Observações:
 - Cria `data/raw` e `data/processed` se faltarem.
 - Flag opcional `--no-winsorize` é repassada ao src.data.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,7 +38,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Wrapper para executar o módulo src.data com parâmetros de ingestão de dados.",
     )
     p.add_argument("--ticker", default="AMZN", help="Ticker (default: AMZN)")
-    p.add_argument("--start", default="2018-01-01", help="AAAA-MM-DD (default: 2018-01-01)")
+    p.add_argument(
+        "--start", default="2018-01-01", help="AAAA-MM-DD (default: 2018-01-01)"
+    )
     p.add_argument("--end", default=None, help="AAAA-MM-DD (opcional)")
     p.add_argument(
         "--no-winsorize",

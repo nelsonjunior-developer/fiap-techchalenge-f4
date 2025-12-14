@@ -8,6 +8,7 @@ API_HOST ?= 0.0.0.0
 API_PORT ?= 8000
 LOG_JSON ?= true
 LOG_LEVEL ?= INFO
+API_BASE_URL ?= http://127.0.0.1:8000
 
 # Data / training defaults
 TICKER ?= AMZN
@@ -20,7 +21,7 @@ BATCH ?= 128
 BLUE := \033[36m
 NC := \033[0m
 
-.PHONY: help install env data features-h1 features-h5 features train eval-h1 eval-h5 api api-dev smoke ready docker-build docker-run compose-up compose-down clean lint format test eda-run
+.PHONY: help install env data features-h1 features-h5 features train eval-h1 eval-h5 api api-dev smoke ready docker-build docker-run compose-up compose-down clean lint format test eda-run streamlit
 
 help: ## Lista alvos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed -e 's/:.*## /\t- /' | sort
@@ -64,6 +65,10 @@ eval-h5: ## Avalia H=5 e salva plots
 eda-run: ## Executa notebooks/eda.ipynb e atualiza no lugar
 	$(PY) -m jupyter nbconvert --to notebook --inplace --execute notebooks/eda.ipynb
 
+# ---- Streamlit ----
+streamlit: ## Sobe o frontend Streamlit
+	API_BASE_URL=$(API_BASE_URL) . .venv/bin/activate; streamlit run app.py --server.port 8501
+
 # ---- API (fonte única via scripts/serve.sh) ----
 api: ## Sobe a API via scripts/serve.sh (fonte única de execução)
 	@echo ">> Iniciando API com scripts/serve.sh (LOG_JSON=$(LOG_JSON), LOG_LEVEL=$(LOG_LEVEL), PORT=$(API_PORT))"
@@ -98,7 +103,11 @@ compose-down: ## Derruba o Compose
 
 # ---- Qualidade / Outros ----
 lint: ## Ruff check (se instalado)
-	@command -v ruff >/dev/null 2>&1 && ruff check . || echo "ruff não instalado; skip"
+	@if command -v ruff >/dev/null 2>&1; then \
+	  ruff check . ; \
+	else \
+	  echo "ruff não instalado; skip" ; \
+	fi
 
 format: ## Ruff format (se instalado)
 	@command -v ruff >/dev/null 2>&1 && ruff format . || echo "ruff não instalado; skip"

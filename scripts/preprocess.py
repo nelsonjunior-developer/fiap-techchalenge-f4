@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env python3
 
 """
@@ -19,6 +17,7 @@ Dica: você também pode usar o Makefile:
   make features-h5   # horizon=5
   make features      # both
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +44,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     )
     p.add_argument("--ticker", default="AMZN", help="Ticker (default: AMZN)")
-    p.add_argument("--window", type=int, default=60, help="Tamanho da janela temporal (default: 60)")
+    p.add_argument(
+        "--window",
+        type=int,
+        default=60,
+        help="Tamanho da janela temporal (default: 60)",
+    )
     p.add_argument(
         "--horizon",
         default="both",

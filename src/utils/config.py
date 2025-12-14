@@ -1,4 +1,3 @@
-
 """
 Configuração centralizada do projeto (Pydantic Settings / Pydantic v2).
 
@@ -11,6 +10,7 @@ Como funciona:
 - `Settings` carrega automaticamente `.env` e variáveis exportadas no ambiente.
 - Ordem de precedência típica: CLI/código > ENV do SO > `.env` > defaults.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -139,9 +139,7 @@ class Settings(BaseSettings):
     def _splits_sum_to_one(self) -> "Settings":
         total = self.TRAIN_SPLIT + self.VAL_SPLIT + self.TEST_SPLIT
         if abs(total - 1.0) > 1e-6:
-            raise ValueError(
-                f"Splits devem somar 1.0 (recebido: {total:.4f})."
-            )
+            raise ValueError(f"Splits devem somar 1.0 (recebido: {total:.4f}).")
         return self
 
     # -----------------
@@ -162,9 +160,7 @@ class Settings(BaseSettings):
         try:
             from sklearn.preprocessing import MinMaxScaler, StandardScaler
         except Exception as exc:  # pragma: no cover - fallback de import
-            raise RuntimeError(
-                "scikit-learn é necessário para criar o scaler"
-            ) from exc
+            raise RuntimeError("scikit-learn é necessário para criar o scaler") from exc
         return StandardScaler() if self.SCALER == "StandardScaler" else MinMaxScaler()
 
     @computed_field(return_type=Path)

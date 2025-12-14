@@ -13,42 +13,47 @@ Endpoints:
 - POST /predict
 - POST /predict-ticker
 """
+
 from __future__ import annotations
 
-# --- sys.path para permitir `python api/main.py` ---
+import json
 import os
 import sys
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-from typing import List
-import json
 import time
 from pathlib import Path
+from typing import List
 from uuid import uuid4
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from joblib import load as joblib_load
 from loguru import logger
 from tensorflow.keras.models import load_model  # type: ignore
-from joblib import load as joblib_load
 
-# Config e Schemas
-from src.utils.config import settings
+from api.monitoring import metrics_endpoint, prometheus_middleware
 from api.schemas import PredictRequest, PredictResponse, PredictTickerRequest
-from api.monitoring import prometheus_middleware, metrics_endpoint
+from src.utils.config import settings
 
 tags_metadata = [
     {"name": "health", "description": "Liveness (/health) e readiness (/ready)."},
     {"name": "metadata", "description": "Artefatos e hiperparâmetros do treino."},
-    {"name": "features", "description": "Ordem oficial de features para validação de payloads."},
-    {"name": "predict", "description": "Inferência com features pré-processadas ou por ticker."},
+    {
+        "name": "features",
+        "description": "Ordem oficial de features para validação de payloads.",
+    },
+    {
+        "name": "predict",
+        "description": "Inferência com features pré-processadas ou por ticker.",
+    },
     {"name": "monitoring", "description": "Métricas Prometheus para observabilidade."},
 ]
-app = FastAPI(title="Tech Challenge F4 – AMZN LSTM API", version="1.2.3", openapi_tags=tags_metadata)
+app = FastAPI(
+    title="Tech Challenge F4 – AMZN LSTM API",
+    version="1.2.3",
+    openapi_tags=tags_metadata,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,7 +75,10 @@ try:
     logger.remove()
 except Exception:
     pass
-logger.add(sys.stdout, level=LOG_LEVEL, serialize=LOG_JSON, backtrace=False, diagnose=False)
+logger.add(
+    sys.stdout, level=LOG_LEVEL, serialize=LOG_JSON, backtrace=False, diagnose=False
+)
+
 
 @app.middleware("http")
 async def access_log(request: Request, call_next):
@@ -92,6 +100,7 @@ async def access_log(request: Request, call_next):
     ).info("request")
     return response
 
+
 # -------------------------------------------------------------------------------------
 # Utilidades
 # -------------------------------------------------------------------------------------
@@ -109,25 +118,34 @@ def _load_features_order_from_npz(window: int, horizon: int) -> List[str]:
         "Gere os arquivos com src.features antes da inferência."
     )
 
+
 def _inverse_close(pred_scaled: np.ndarray, scaler, close_idx: int) -> np.ndarray:
     """Converte (H,) da escala do scaler para a escala original do Close."""
     if hasattr(scaler, "mean_") and hasattr(scaler, "scale_"):  # StandardScaler
         return pred_scaled * scaler.scale_[close_idx] + scaler.mean_[close_idx]
     if hasattr(scaler, "data_min_") and hasattr(scaler, "data_max_"):  # MinMaxScaler
-        return pred_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx]) + scaler.data_min_[close_idx]
+        return (
+            pred_scaled * (scaler.data_max_[close_idx] - scaler.data_min_[close_idx])
+            + scaler.data_min_[close_idx]
+        )
     return pred_scaled
+
 
 _MODEL_CACHE: dict[int, object] = {}
 _SCALER = None
 
+
 def _get_model(horizon: int):
-    path = Path(settings.MODELS_DIR) / ("model_h1.h5" if horizon == 1 else "model_h5.h5")
+    path = Path(settings.MODELS_DIR) / (
+        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+    )
     if not path.exists():
         raise FileNotFoundError(f"Modelo não encontrado: {path}")
     if horizon not in _MODEL_CACHE:
         logger.info("Carregando modelo {}", path)
         _MODEL_CACHE[horizon] = load_model(path, compile=False)
     return _MODEL_CACHE[horizon]
+
 
 def _get_scaler():
     global _SCALER
@@ -139,12 +157,18 @@ def _get_scaler():
         _SCALER = joblib_load(p)
     return _SCALER
 
+
 # -------------------------------------------------------------------------------------
 # Endpoints
 # -------------------------------------------------------------------------------------
 @app.get("/health", tags=["health"])
 def health() -> dict:
-    return {"status": "ok", "ticker": settings.TICKER, "window_default": settings.WINDOW}
+    return {
+        "status": "ok",
+        "ticker": settings.TICKER,
+        "window_default": settings.WINDOW,
+    }
+
 
 @app.get("/ready", tags=["health"])
 def ready():
@@ -155,8 +179,11 @@ def ready():
     ]
     missing = [str(p) for p in paths if not p.exists()]
     if missing:
-        raise HTTPException(status_code=503, detail={"ready": False, "missing": missing})
+        raise HTTPException(
+            status_code=503, detail={"ready": False, "missing": missing}
+        )
     return {"ready": True}
+
 
 @app.get("/metadata", tags=["metadata"])
 def metadata() -> JSONResponse:
@@ -169,9 +196,11 @@ def metadata() -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Falha ao ler metadata: {e}")
     return JSONResponse(content=data)
 
+
 @app.get("/metrics", tags=["monitoring"])
 def metrics() -> PlainTextResponse:
     return metrics_endpoint()
+
 
 @app.get("/features-order", tags=["features"])
 def features_order(horizon: int, window: int | None = None) -> dict:
@@ -179,7 +208,13 @@ def features_order(horizon: int, window: int | None = None) -> dict:
         raise HTTPException(status_code=422, detail="horizon deve ser 1 ou 5")
     w = window or settings.WINDOW
     feats = _load_features_order_from_npz(w, horizon)
-    return {"horizon": horizon, "window": w, "n_features": len(feats), "features": feats}
+    return {
+        "horizon": horizon,
+        "window": w,
+        "n_features": len(feats),
+        "features": feats,
+    }
+
 
 @app.post("/predict", response_model=PredictResponse, tags=["predict"])
 def predict(payload: PredictRequest) -> PredictResponse:
@@ -195,32 +230,37 @@ def predict(payload: PredictRequest) -> PredictResponse:
     if payload.recent_features is None:
         raise HTTPException(
             status_code=422,
-            detail="Envie 'recent_features' [window, n_features] na MESMA ORDEM das features de treino."
+            detail="Envie 'recent_features' [window, n_features] na MESMA ORDEM das features de treino.",
         )
 
     X_in = np.asarray(payload.recent_features, dtype=float)
     if X_in.ndim != 2 or X_in.shape[0] != window:
-        raise HTTPException(status_code=422, detail=f"recent_features deve ter shape [window={window}, n_features]")
+        raise HTTPException(
+            status_code=422,
+            detail=f"recent_features deve ter shape [window={window}, n_features]",
+        )
 
     n_features = X_in.shape[1]
     if payload.features_order is not None:
         if list(payload.features_order) != list(expected_feats):
             raise HTTPException(
                 status_code=422,
-                detail="features_order não coincide com a ordem de treino. Consulte /features-order."
+                detail="features_order não coincide com a ordem de treino. Consulte /features-order.",
             )
     else:
         if n_features != len(expected_feats):
             raise HTTPException(
                 status_code=422,
-                detail=f"n_features={n_features} difere do treino ({len(expected_feats)}). Informe 'features_order' se necessário."
+                detail=f"n_features={n_features} difere do treino ({len(expected_feats)}). Informe 'features_order' se necessário.",
             )
 
     scaler = _get_scaler()
     try:
         X_scaled = scaler.transform(X_in)
     except Exception:
-        X_scaled = np.vstack([scaler.transform(X_in[i:i+1, :]) for i in range(X_in.shape[0])])
+        X_scaled = np.vstack(
+            [scaler.transform(X_in[i : i + 1, :]) for i in range(X_in.shape[0])]
+        )
 
     model = _get_model(payload.horizon)
     X_model = X_scaled[np.newaxis, :, :]
@@ -229,7 +269,9 @@ def predict(payload: PredictRequest) -> PredictResponse:
     try:
         close_idx = list(expected_feats).index("Close")
     except ValueError:
-        raise HTTPException(status_code=500, detail="Feature 'Close' ausente na lista de treino.")
+        raise HTTPException(
+            status_code=500, detail="Feature 'Close' ausente na lista de treino."
+        )
 
     y_pred = _inverse_close(y_pred_scaled, scaler, close_idx)
     y_pred = np.atleast_1d(y_pred).astype(float).tolist()
@@ -240,10 +282,16 @@ def predict(payload: PredictRequest) -> PredictResponse:
         n_features=n_features,
         features=list(expected_feats),
         predictions=y_pred,
-        model_path=str(Path(settings.MODELS_DIR) / ("model_h1.h5" if payload.horizon == 1 else "model_h5.h5")),
+        model_path=str(
+            Path(settings.MODELS_DIR)
+            / ("model_h1.h5" if payload.horizon == 1 else "model_h5.h5")
+        ),
         scaler_path=str(settings.SCALER_PATH),
-        metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json") if (Path(settings.MODELS_DIR) / "metadata.json").exists() else None,
+        metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json")
+        if (Path(settings.MODELS_DIR) / "metadata.json").exists()
+        else None,
     )
+
 
 @app.post("/predict-ticker", response_model=PredictResponse, tags=["predict"])
 def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
@@ -258,12 +306,16 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
     except Exception as e:
         raise HTTPException(
             status_code=503,
-            detail=("Endpoint indisponível: crie 'api/inference.py'. Detalhe: " + str(e))
+            detail=(
+                "Endpoint indisponível: crie 'api/inference.py'. Detalhe: " + str(e)
+            ),
         )
 
     try:
         X_model, features, scaler, close_idx = prepare_window_for_model(
-            ticker=ticker, window=window, horizon=payload.horizon,
+            ticker=ticker,
+            window=window,
+            horizon=payload.horizon,
             lookback_days=payload.lookback_days,
             scaler_path=str(settings.SCALER_PATH),
             processed_dir=str(settings.PROCESSED_DIR),
@@ -284,20 +336,28 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
         n_features=len(features),
         features=list(features),
         predictions=y_pred,
-        model_path=str(Path(settings.MODELS_DIR) / ("model_h1.h5" if payload.horizon == 1 else "model_h5.h5")),
+        model_path=str(
+            Path(settings.MODELS_DIR)
+            / ("model_h1.h5" if payload.horizon == 1 else "model_h5.h5")
+        ),
         scaler_path=str(settings.SCALER_PATH),
-        metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json") if (Path(settings.MODELS_DIR) / "metadata.json").exists() else None,
+        metadata_path=str(Path(settings.MODELS_DIR) / "metadata.json")
+        if (Path(settings.MODELS_DIR) / "metadata.json").exists()
+        else None,
     )
+
 
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
+
 
 # -------------------------------------------------------------------------------------
 # Execução local
 # -------------------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
+
     host = getattr(settings, "API_HOST", "0.0.0.0")
     port = int(getattr(settings, "API_PORT", 8000))
     logger.info("Subindo API em http://{h}:{p}", h=host, p=port)
