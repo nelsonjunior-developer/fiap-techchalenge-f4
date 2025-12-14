@@ -525,16 +525,30 @@ scrape_configs:
 A aplicação Streamlit consome a API para exibir histórico e previsões de forma interativa.
 
 ```bash
-# Em desenvolvimento (API já rodando em :8000)
-streamlit run app.py
+# Local (API local em :8000)
+make api &             # ou uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+make streamlit         # ou streamlit run app.py
 ```
 
-- URL default da API: `http://127.0.0.1:8000`. Para apontar para outra URL, defina a variável no seu `.env`:
-  ```env
-  API_BASE_URL=http://127.0.0.1:8000
+- URL default da API: `http://127.0.0.1:8000`. Para apontar para outra URL, defina:
+  - variável de ambiente `API_BASE_URL`, ou
+  - em cloud (Streamlit Community Cloud), o secret `API_BASE_URL` em **Settings → Secrets**.
+  Exemplo de secrets no Streamlit Cloud:
+  ```
+  API_BASE_URL = "https://fiap-techchalenge-f4.onrender.com"
   ```
 
 > Dica: se estiver rodando a API em Docker e o Streamlit na máquina, mantenha o mapeamento `-p 8000:8000` no container.
+> Observação (CORS): o backend aceita origens abertas; se restringir, inclua `https://fiap-tc-f4.streamlit.app`.
+
+---
+
+## Deploy (Cloud)
+
+- **Render (API)**: https://fiap-techchalenge-f4.onrender.com/health
+- **Streamlit Cloud (frontend)**: https://fiap-tc-f4.streamlit.app/
+  - Configure o Secret `API_BASE_URL="https://fiap-techchalenge-f4.onrender.com"` em Settings → Secrets.
+  - A UI mostrará erro orientando a configurar `API_BASE_URL` se o /health falhar.
 
 ---
 

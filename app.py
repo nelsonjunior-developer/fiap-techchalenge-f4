@@ -16,8 +16,8 @@ Execução local:
 
 from __future__ import annotations
 
-import os
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
@@ -26,16 +26,6 @@ import requests
 import streamlit as st
 import yfinance as yf
 
-# ============================
-# Configuração básica do app
-# ============================
-DEFAULT_API_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-st.set_page_config(page_title="Tech Challenge F4 – LSTM Forecast", layout="wide")
-
-# Mostrar detalhes de erros no cliente Streamlit (útil para debug)
-st.set_option("client.showErrorDetails", True)
-
-
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -43,6 +33,33 @@ def _now() -> str:
 def log(msg: str) -> None:
     """Log simples para stdout (aparece no terminal do Streamlit)."""
     print(f"[app.py] {_now()} {msg}")
+
+
+def resolve_api_base_url() -> str:
+    """Resolve a URL base da API (env > secrets > fallback local)."""
+    env_url = os.getenv("API_BASE_URL")
+    secret_url: Optional[str] = None
+    try:
+        secret_url = st.secrets.get("API_BASE_URL")  # type: ignore[attr-defined]
+    except Exception:
+        secret_url = None
+
+    url = env_url or secret_url or "http://127.0.0.1:8000"
+    url = url.rstrip("/")
+    if not url:
+        url = "http://127.0.0.1:8000"
+    return url
+
+
+# ============================
+# Configuração básica do app
+# ============================
+API_BASE_URL = resolve_api_base_url()
+log(f"Using API_BASE_URL={API_BASE_URL}")
+st.set_page_config(page_title="Tech Challenge F4 – LSTM Forecast", layout="wide")
+
+# Mostrar detalhes de erros no cliente Streamlit (útil para debug)
+st.set_option("client.showErrorDetails", True)
 
 
 # ============================
@@ -193,7 +210,7 @@ def build_payload_from_df(
 def sidebar_ui() -> Dict[str, Any]:
     st.sidebar.header("Configurações")
     api_url = st.sidebar.text_input(
-        "API Base URL", value=DEFAULT_API_URL, help="Ex.: http://127.0.0.1:8000"
+        "API Base URL", value=API_BASE_URL, help="Ex.: http://127.0.0.1:8000"
     )
 
     st.sidebar.markdown("---")
@@ -277,6 +294,16 @@ def main() -> None:
         "Frontend simples em Streamlit para consumir a API (FastAPI) deste projeto. "
         "Use como apoio didático para explorar o comportamento do modelo."
     )
+
+    # Checa /health da API base antes de renderizar a UI completa
+    base_url = API_BASE_URL
+    health, lat, err = api_health(base_url)
+    if err:
+        st.error(
+            f"API indisponível ({err}). Configure API_BASE_URL nos Secrets do Streamlit ou nas variáveis de ambiente."
+        )
+    else:
+        st.info(f"API OK ({lat:.3f}s) em {base_url}")
 
     cfg = sidebar_ui()
     log("main: loaded sidebar config")
@@ -450,7 +477,7 @@ def main() -> None:
 if __name__ == "__main__":
     # Permite executar como script padrão (sem streamlit) para checar disponibilidade da API
     # Ex.: python app.py
-    api_url = DEFAULT_API_URL
+    api_url = API_BASE_URL
     health, lat, err = api_health(api_url)
     if err:
         log(f"/health erro ({lat:.3f}s): {err}")
