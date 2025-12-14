@@ -103,7 +103,9 @@ compose-down: ## Derruba o Compose
 
 # ---- Qualidade / Outros ----
 lint: ## Ruff check (se instalado)
-	@if command -v ruff >/dev/null 2>&1; then \
+	@if [ -x .venv/bin/ruff ]; then \
+	  .venv/bin/ruff check . ; \
+	elif command -v ruff >/dev/null 2>&1; then \
 	  ruff check . ; \
 	else \
 	  echo "ruff não instalado; skip" ; \

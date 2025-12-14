@@ -38,9 +38,9 @@ tech-challenge/
 │   └── dashboards/              # Dashboards (JSON) para observabilidade (opcional)
 │
 ├── tests/
-│   ├── test_features.py         # Shapes/índices e janelas
-│   ├── test_inference.py        # Carregamento e seleção H=1/H=5
-│   └── test_api.py              # /health e /predict
+│   ├── test_features.py         # Shapes/índices e janelas dos .npz
+│   ├── test_inference.py        # Artefatos H=1/H=5 e smoke de inferência
+│   └── test_api.py              # Smoke dos endpoints (health, ready, metrics, predict)
 │
 ├── docker/
 │   ├── Dockerfile               # Imagem da API (python:3.11-slim + uvicorn)
@@ -204,6 +204,11 @@ make format                    # ruff format (se instalado)
 make test                      # pytest (se instalado)
 make clean                     # remove npz, modelos, scaler, metadata, plots
 ```
+
+### Testes automatizados e CI
+- Suite Pytest cobre features (.npz), artefatos de inferência (H=1/H=5) e smoke da API. Testes pesados fazem `skip` se artefatos faltarem ou se `CI=true`.
+- Rode localmente com `pytest` (ou `make test`), ou apenas um arquivo: `pytest tests/test_api.py`.
+- CI via GitHub Actions (`.github/workflows/ci.yml`): roda Ruff (`ruff check .`), Pytest filtrando marcações (`-m "not slow and not integration"`) e um smoke `/health` sob Uvicorn.
 
 ### Docker / Compose
 ```bash
