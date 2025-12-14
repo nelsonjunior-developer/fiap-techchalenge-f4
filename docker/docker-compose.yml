@@ -49,3 +49,17 @@ services:
       - ../monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ../monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ../monitoring/dashboards:/var/lib/grafana/dashboards
+
+  streamlit:
+    build:
+      context: ..
+      dockerfile: docker/streamlit.Dockerfile
+    environment:
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "8501:8501"
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    volumes:
+      - ../app.py:/app/app.py:ro

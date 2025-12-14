@@ -105,14 +105,19 @@ cp .env.example .env
 # START_DATE=2018-01-01
 ```
 
-### 4) Subir a API localmente
-Com o ambiente ativo e dependências instaladas, rode:
-```bash
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-```
-A documentação interativa (OpenAPI/Swagger) estará disponível em: `http://127.0.0.1:8000/docs`.
+### 4) Subir a API (via Makefile)
 
-Teste rápido de saúde:
+Com o ambiente ativo e dependências instaladas, use os alvos do Makefile:
+
+```bash
+make api       # modo padrão (logs JSON)
+# ou, modo desenvolvimento com auto-reload:
+make api-dev
+```
+
+Documentação: `http://127.0.0.1:8000/docs`
+
+Teste rápido:
 ```bash
 curl http://127.0.0.1:8000/health
 ```
@@ -576,6 +581,31 @@ Se optar por orquestrar API + Prometheus/Grafana:
 # Requer docker-compose v2+
 docker compose -f docker/docker-compose.yml up --build
 ```
+
+## Deploy na Nuvem
+
+### Render — Serviço Python (sem Docker)
+1) Confirme que o repositório tem `runtime.txt` com `python-3.11.9`.
+2) `requirements.txt` deve conter: `numpy<2`, `pandas==2.2.2`, `tensorflow>=2.15,<2.16`, etc.
+3) No Render: New → Web Service → selecione o repositório.
+   - Runtime: Python 3 (o Render lerá `runtime.txt` = 3.11).
+   - Build command: `pip install --upgrade pip && pip install -r requirements.txt`
+   - Start command: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+   - Health check path: `/health`
+4) Após deploy, teste: `curl https://<your-service>.onrender.com/health`.
+
+### Render — Blueprint (Docker)
+1) Garanta `render.yaml` e `docker/Dockerfile` no repo.
+2) No Render: New → Blueprint, aponte para o repositório, Deploy.
+3) A API sobe em `https://<your-service>.onrender.com`.
+
+### Streamlit Cloud (frontend)
+- Em https://share.streamlit.io, aponte `Main file path` para `app.py`.
+- Em “Advanced settings → Secrets”, defina:
+  ```
+  API_BASE_URL="https://<your-service>.onrender.com"
+  ```
+- Clique **Deploy** e depois **Rerun** se necessário.
 
 ---
 
