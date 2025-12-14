@@ -72,10 +72,8 @@ def test_predict_ticker_smoke_or_skip(horizon):
     except Exception as e:
         pytest.skip(f"predict-ticker indisponível: {e}")
 
-    if r.status_code >= 500:
-        pytest.skip(f"predict-ticker retornou {r.status_code}")
-    # Aceita 200 ou 400/422 (validação) para não tornar o teste frágil
-    assert r.status_code in (200, 400, 422)
+    # Aceita 200 ou 400/422 (validação) ou 502 (falha externa de dados)
+    assert r.status_code in (200, 400, 422, 502)
     if r.status_code == 200:
         body = r.json()
         assert "predictions" in body

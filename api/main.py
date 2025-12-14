@@ -320,6 +320,11 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
             scaler_path=str(settings.SCALER_PATH),
             processed_dir=str(settings.PROCESSED_DIR),
         )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Falha ao obter dados ou preparar janela para {ticker}: {e}",
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
