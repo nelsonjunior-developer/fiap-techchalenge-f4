@@ -217,6 +217,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Streamlit secrets (não versionar)
+.streamlit/secrets.toml
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
