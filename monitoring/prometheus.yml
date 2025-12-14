@@ -1,24 +1,15 @@
-# monitoring/prometheus.yml – Prometheus scrape config
-# Uso:
-#  - Em docker-compose, este arquivo é montado em /etc/prometheus/prometheus.yml
-#  - Inclui scrape para a API em dois cenários:
-#      1) Dentro do compose (target: api:8000)
-#      2) Execução local (target: localhost:8000)
-
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-  scrape_timeout: 10s
-  external_labels:
-    project: tech-challenge-f4
+  scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
-  - job_name: "tech-challenge-api-docker"
+  # Scrape da API rodando no serviço Docker "api"
+  - job_name: tech-challenge-api-docker
     metrics_path: /metrics
     static_configs:
-      - targets: ["api:8000"]
+      - targets: ['api:8000']
 
-  - job_name: "tech-challenge-api-local"
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["localhost:8000"]
+# Observação:
+# Removemos qualquer job "tech-challenge-api-local" (ex: localhost:8000),
+# pois dentro do container do Prometheus, "localhost" aponta para o próprio Prometheus,
+# não para a API no host.

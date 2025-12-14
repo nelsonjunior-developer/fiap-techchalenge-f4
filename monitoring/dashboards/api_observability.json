@@ -1,0 +1,60 @@
+{
+  "id": null,
+  "uid": "api-obs-techchallenge",
+  "title": "API Observability \u2014 Tech Challenge",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests rate por rota/status (req/s)",
+      "description": "rate(http_requests_total[1m]) agrupado por endpoint e status",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (endpoint, http_status) ( rate(http_requests_total[1m]) )",
+          "legendFormat": "{{endpoint}} {{http_status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Lat\u00eancia p95 (s)",
+      "description": "histogram_quantile(0.95, sum by (endpoint, le) ( rate(http_request_duration_seconds_bucket[5m]) ) )",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (endpoint, le) ( rate(http_request_duration_seconds_bucket[5m]) ) )",
+          "legendFormat": "{{endpoint}} p95",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Infer\u00eancias por horizonte (req/s)",
+      "description": "sum by (endpoint) ( rate(http_requests_total{endpoint=~\"/predict.*\"}[1m]) )",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (endpoint) ( rate(http_requests_total{endpoint=~\"/predict.*\"}[1m]) )",
+          "legendFormat": "{{endpoint}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      }
+    }
+  ]
+}
