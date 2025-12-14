@@ -95,11 +95,11 @@ docker-build: ## Build da imagem da API
 docker-run: ## Executa a imagem mapeando porta 8000
 	docker run --rm -p $(API_PORT):8000 --env-file .env tech-f4-api
 
-compose-up: ## Sobe API + Prometheus/Grafana via Compose
+compose-up: ## Sobe API + Prometheus/Grafana + Streamlit via Compose
 	docker compose -f docker/docker-compose.yml up --build
 
 compose-down: ## Derruba o Compose
-	docker compose -f docker/docker-compose.yml down
+	docker compose -f docker/docker-compose.yml down -v --remove-orphans
 
 # ---- Qualidade / Outros ----
 lint: ## Ruff check (se instalado)

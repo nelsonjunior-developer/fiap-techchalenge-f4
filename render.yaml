@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: fiap-techchallenge-f4
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: docker/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: LOG_JSON
+        value: "true"
+      - key: LOG_LEVEL
+        value: "INFO"
