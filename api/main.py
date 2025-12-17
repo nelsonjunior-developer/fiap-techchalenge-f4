@@ -141,7 +141,23 @@ class InputLayerCompat(tf.keras.layers.InputLayer):
     @classmethod
     def from_config(cls, config):  # type: ignore[override]
         cfg_in = dict(config)
-        batch_shape = cfg_in.pop("batch_shape", None)
+
+        def _norm_shape(val):
+            if isinstance(val, (list, tuple)):
+                out = []
+                for x in val:
+                    if x is None:
+                        out.append(None)
+                    elif isinstance(x, (int, float)):
+                        out.append(int(x))
+                    else:
+                        return None
+                return tuple(out)
+            return None
+
+        batch_shape = _norm_shape(cfg_in.pop("batch_shape", None)) or _norm_shape(
+            cfg_in.pop("batch_input_shape", None)
+        )
         cfg: dict = {}
         if batch_shape is not None and len(batch_shape) >= 2:
             cfg["input_shape"] = tuple(batch_shape[1:])
@@ -168,8 +184,10 @@ class DTypePolicyCompat(tf.keras.mixed_precision.Policy):
 
     @classmethod
     def from_config(cls, config):  # type: ignore[override]
-        # Usa a factory oficial para recriar a policy a partir do config
-        return tf.keras.mixed_precision.Policy.from_config(config)
+        try:
+            return tf.keras.mixed_precision.Policy.from_config(config)
+        except Exception:
+            return tf.keras.mixed_precision.Policy(str(config))
 
 def _get_model(horizon: int):
     candidates = [
@@ -228,7 +246,10 @@ def _get_model(horizon: int):
                     _MODEL_CACHE[horizon] = tf.keras.models.load_model(
                         path,
                         compile=False,
-                        custom_objects={"DTypePolicy": DTypePolicyCompat},
+                        custom_objects={
+                            "DTypePolicy": DTypePolicyCompat,
+                            "InputLayer": InputLayerCompat,
+                        },
                     )
                 except Exception as e2:
                     logger.exception("Falha no modo compat (DTypePolicy) ao carregar %s", path)
