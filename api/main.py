@@ -135,6 +135,16 @@ _MODEL_CACHE: dict[int, object] = {}
 _SCALER = None
 
 
+def _inject_keras_aliases():
+    """Cria aliases mínimos para módulos ausentes em serializações legadas."""
+    import types
+
+    functional_mod = types.SimpleNamespace(Functional=tf.keras.Model)
+    sys.modules.setdefault("keras.src.models.functional", functional_mod)
+    # Camadas herdadas podem referenciar módulos internos; adicione alias se necessário.
+    sys.modules.setdefault("keras.src.models", types.SimpleNamespace(Functional=tf.keras.Model))
+
+
 class InputLayerCompat(tf.keras.layers.InputLayer):
     """Compat layer para modelos .h5 legados com `batch_shape` no config."""
 
@@ -211,6 +221,7 @@ def _get_model(horizon: int):
             tf_version,
             keras_version,
         )
+        _inject_keras_aliases()
         errors: list[str] = []
         for attempt, kwargs, desc in [
             ("normal", {"compile": False}, "padrão"),
@@ -221,6 +232,7 @@ def _get_model(horizon: int):
                     "custom_objects": {
                         "InputLayer": InputLayerCompat,
                         "DTypePolicy": DTypePolicyCompat,
+                        "Functional": tf.keras.Model,
                     },
                 },
                 "modo compat (InputLayer/DTypePolicy)",
@@ -233,6 +245,7 @@ def _get_model(horizon: int):
                     "custom_objects": {
                         "InputLayer": InputLayerCompat,
                         "DTypePolicy": DTypePolicyCompat,
+                        "Functional": tf.keras.Model,
                     },
                 },
                 "modo compat safe_mode=False",
