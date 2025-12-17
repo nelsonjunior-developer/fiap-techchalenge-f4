@@ -140,13 +140,26 @@ class InputLayerCompat(tf.keras.layers.InputLayer):
 
     @classmethod
     def from_config(cls, config):  # type: ignore[override]
-        cfg = dict(config)
-        batch_shape = cfg.pop("batch_shape", None)
-        if batch_shape is not None:
-            if len(batch_shape) >= 1:
-                cfg["batch_size"] = batch_shape[0]
-            if len(batch_shape) >= 2:
-                cfg["input_shape"] = tuple(batch_shape[1:])
+        cfg_in = dict(config)
+        batch_shape = cfg_in.pop("batch_shape", None)
+        cfg: dict = {}
+        if batch_shape is not None and len(batch_shape) >= 2:
+            cfg["input_shape"] = tuple(batch_shape[1:])
+        if batch_shape is not None and len(batch_shape) >= 1:
+            cfg["batch_size"] = batch_shape[0]
+        allowed = {
+            "batch_input_shape",
+            "batch_size",
+            "dtype",
+            "input_shape",
+            "sparse",
+            "name",
+            "ragged",
+            "type_spec",
+        }
+        for k, v in cfg_in.items():
+            if k in allowed:
+                cfg[k] = v
         return cls(**cfg)
 
 
