@@ -80,6 +80,9 @@ api-dev: ## API (dev) via scripts/serve.sh --reload
 	LOG_JSON=false LOG_LEVEL=DEBUG API_HOST=$(API_HOST) API_PORT=$(API_PORT) \
 	  bash scripts/serve.sh --reload --host $(API_HOST) --port $(API_PORT) --log-level DEBUG
 
+convert-models: ## Converte modelos .h5 para .keras (utilitário)
+	. .venv/bin/activate; python scripts/convert_models.py
+
 # ---- Smoke / Ready ----
 smoke: ## Smoke test: /health e /features-order
 	@echo "${BLUE}GET /health${NC}"; curl -s http://127.0.0.1:$(API_PORT)/health | jq . || true
