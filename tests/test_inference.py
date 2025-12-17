@@ -26,7 +26,7 @@ def _load_metadata_or_skip():
 
 def _artifact_paths_for(horizon: int, window: int):
     """Obtém caminhos de artefatos de forma robusta, com fallback."""
-    model_path = f"models/model_h{horizon}.h5"
+    model_path = f"models/model_h{horizon}.keras"
     scaler_path = "models/scaler.joblib"
     metadata_path = METADATA_PATH
     try:

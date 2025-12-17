@@ -150,9 +150,9 @@ def train_once(
     y_base_te = _naive_persistence_from_X(X_te, close_idx, horizon)
     res_base = _evaluate_on_original_scale(y_te, y_base_te, scaler, close_idx)
 
-    # Persistência do modelo
+    # Persistência do modelo em formato .keras
     out_path = Path(settings.MODELS_DIR) / (
-        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+        "model_h1.keras" if horizon == 1 else "model_h5.keras"
     )
     Path(settings.MODELS_DIR).mkdir(parents=True, exist_ok=True)
     model.save(out_path)

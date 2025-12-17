@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from joblib import load
 from loguru import logger
-from tensorflow.keras.models import load_model  # type: ignore
+import tensorflow as tf
 
 from src.utils.config import settings
 
@@ -222,12 +222,18 @@ def evaluate(
     assert "Close" in feats, "Feature 'Close' ausente."
     close_idx = feats.index("Close")
 
-    # Carrega modelo (.h5) com compile=False para evitar desserializar losses/metrics legadas
+    # Carrega modelo (.keras) com compile=False para evitar desserializar losses/metrics legadas
     model_path = Path(settings.MODELS_DIR) / (
-        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+        "model_h1.keras" if horizon == 1 else "model_h5.keras"
     )
+    if not model_path.exists():
+        alt_path = Path(settings.MODELS_DIR) / (
+            "model_h1.h5" if horizon == 1 else "model_h5.h5"
+        )
+        if alt_path.exists():
+            model_path = alt_path
     assert model_path.exists(), f"Modelo não encontrado: {model_path}"
-    model = load_model(model_path, compile=False)
+    model = tf.keras.models.load_model(model_path, compile=False)
 
     # Predições
     y_pred_te = model.predict(X_te, verbose=0)

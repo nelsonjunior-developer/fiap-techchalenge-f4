@@ -80,7 +80,7 @@ api-dev: ## API (dev) via scripts/serve.sh --reload
 	LOG_JSON=false LOG_LEVEL=DEBUG API_HOST=$(API_HOST) API_PORT=$(API_PORT) \
 	  bash scripts/serve.sh --reload --host $(API_HOST) --port $(API_PORT) --log-level DEBUG
 
-convert-models: ## Converte modelos .h5 para .keras (utilitário)
+convert-models: ## (Opcional) Converte modelos .h5 para .keras
 	. .venv/bin/activate; python scripts/convert_models.py
 
 # ---- Smoke / Ready ----
