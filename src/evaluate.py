@@ -222,16 +222,10 @@ def evaluate(
     assert "Close" in feats, "Feature 'Close' ausente."
     close_idx = feats.index("Close")
 
-    # Carrega modelo (.keras) com compile=False para evitar desserializar losses/metrics legadas
+    # Carrega modelo (.h5) com compile=False para evitar desserializar losses/metrics legadas
     model_path = Path(settings.MODELS_DIR) / (
-        "model_h1.keras" if horizon == 1 else "model_h5.keras"
+        "model_h1.h5" if horizon == 1 else "model_h5.h5"
     )
-    if not model_path.exists():
-        alt_path = Path(settings.MODELS_DIR) / (
-            "model_h1.h5" if horizon == 1 else "model_h5.h5"
-        )
-        if alt_path.exists():
-            model_path = alt_path
     assert model_path.exists(), f"Modelo não encontrado: {model_path}"
     model = tf.keras.models.load_model(model_path, compile=False)
 

@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     PROCESSED_DIR: Path = Path("./data/processed")
     MODELS_DIR: Path = Path("./models")
     SCALER_PATH: Path = Path("./models/scaler.joblib")
-    MODEL_H1_PATH: Path = Path("./models/model_h1.keras")
-    MODEL_H5_PATH: Path = Path("./models/model_h5.keras")
+    MODEL_H1_PATH: Path = Path("./models/model_h1.h5")
+    MODEL_H5_PATH: Path = Path("./models/model_h5.h5")
     METADATA_PATH: Path = Path("./models/metadata.json")
 
     # ===== API (FastAPI / Uvicorn) =====

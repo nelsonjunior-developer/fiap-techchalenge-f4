@@ -134,69 +134,12 @@ def _inverse_close(pred_scaled: np.ndarray, scaler, close_idx: int) -> np.ndarra
 _MODEL_CACHE: dict[int, object] = {}
 _SCALER = None
 
-
-class InputLayerCompat(tf.keras.layers.InputLayer):
-    """Compat layer para modelos .h5 legados com `batch_shape` no config."""
-
-    @classmethod
-    def from_config(cls, config):  # type: ignore[override]
-        cfg_in = dict(config)
-
-        def _norm_shape(val):
-            if isinstance(val, (list, tuple)):
-                out = []
-                for x in val:
-                    if x is None:
-                        out.append(None)
-                    elif isinstance(x, (int, float)):
-                        out.append(int(x))
-                    else:
-                        return None
-                return tuple(out)
-            return None
-
-        batch_shape = _norm_shape(cfg_in.pop("batch_shape", None)) or _norm_shape(
-            cfg_in.pop("batch_input_shape", None)
-        )
-        cfg: dict = {}
-        if batch_shape is not None and len(batch_shape) >= 2:
-            cfg["input_shape"] = tuple(batch_shape[1:])
-        if batch_shape is not None and len(batch_shape) >= 1:
-            cfg["batch_size"] = batch_shape[0]
-        allowed = {
-            "batch_input_shape",
-            "batch_size",
-            "dtype",
-            "input_shape",
-            "sparse",
-            "name",
-            "ragged",
-            "type_spec",
-        }
-        for k, v in cfg_in.items():
-            if k in allowed:
-                cfg[k] = v
-        return cls(**cfg)
-
-
-class DTypePolicyCompat(tf.keras.mixed_precision.Policy):
-    """Compat para dtype policy serializado em h5 legados."""
-
-    @classmethod
-    def from_config(cls, config):  # type: ignore[override]
-        try:
-            return tf.keras.mixed_precision.Policy.from_config(config)
-        except Exception:
-            return tf.keras.mixed_precision.Policy(str(config))
-
 def _get_model(horizon: int):
-    candidates = [
-        Path(settings.MODELS_DIR) / ("model_h1.keras" if horizon == 1 else "model_h5.keras"),
-        Path(settings.MODELS_DIR) / ("model_h1.h5" if horizon == 1 else "model_h5.h5"),
-    ]
-    path = next((p for p in candidates if p.exists()), None)
-    if path is None:
-        raise FileNotFoundError(f"Modelo não encontrado (esperado .keras ou .h5) em {settings.MODELS_DIR}")
+    path = Path(settings.MODELS_DIR) / (
+        "model_h1.h5" if horizon == 1 else "model_h5.h5"
+    )
+    if not path.exists():
+        raise FileNotFoundError(f"Modelo não encontrado: {path}")
     if horizon not in _MODEL_CACHE:
         tf_version = getattr(tf, "__version__", "unknown")
         try:
@@ -211,53 +154,14 @@ def _get_model(horizon: int):
             tf_version,
             keras_version,
         )
-        errors: list[str] = []
-        for attempt, kwargs, desc in [
-            ("normal", {"compile": False}, "padrão"),
-            (
-                "compat",
-                {
-                    "compile": False,
-                    "custom_objects": {
-                        "InputLayer": InputLayerCompat,
-                        "DTypePolicy": DTypePolicyCompat,
-                    },
-                },
-                "modo compat (InputLayer/DTypePolicy)",
-            ),
-            (
-                "compat_safe",
-                {
-                    "compile": False,
-                    "safe_mode": False,
-                    "custom_objects": {
-                        "InputLayer": InputLayerCompat,
-                        "DTypePolicy": DTypePolicyCompat,
-                    },
-                },
-                "modo compat safe_mode=False",
-            ),
-        ]:
-            try:
-                _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, **kwargs)
-                return _MODEL_CACHE[horizon]
-            except Exception as e:
-                msg = str(e)
-                errors.append(f"{attempt}: {msg[:200]}")
-                if attempt == "compat":
-                    logger.warning(
-                        "Load %s falhou para %s (%s); tentando safe_mode=False",
-                        desc,
-                        path,
-                        msg[:200],
-                    )
-                else:
-                    logger.exception("Falha no load (%s) para %s", desc, path)
-        # Se todas falharem
-        raise HTTPException(
-            status_code=500,
-            detail=f"Falha ao carregar modelo {path.name}: {' | '.join(errors)}",
-        )
+        try:
+            _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
+        except Exception as e:
+            logger.exception("Falha ao carregar modelo %s", path)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Falha ao carregar modelo {path.name}: {str(e)[:200]}",
+            )
     return _MODEL_CACHE[horizon]
 
 
