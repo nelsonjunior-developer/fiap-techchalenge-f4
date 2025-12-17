@@ -211,83 +211,53 @@ def _get_model(horizon: int):
             tf_version,
             keras_version,
         )
-        try:
-            _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
-            return _MODEL_CACHE[horizon]
-        except (TypeError, ValueError, AttributeError) as e:
-            msg = str(e)
-            if "batch_shape" in msg or "Unrecognized keyword arguments" in msg:
-                logger.warning(
-                    "Load padrão falhou para %s (%s); tentando modo compat InputLayer",
-                    path,
-                    msg[:200],
-                )
-                try:
-                    _MODEL_CACHE[horizon] = tf.keras.models.load_model(
-                        path,
-                        compile=False,
-                        custom_objects={
-                            "InputLayer": InputLayerCompat,
-                            "DTypePolicy": DTypePolicyCompat,
-                        },
-                    )
-                    return _MODEL_CACHE[horizon]
-                except Exception as e2:
-                    logger.exception("Falha no modo compat ao carregar %s", path)
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Falha ao carregar modelo {path.name}: {str(e2)[:200]}",
-                    )
-            if "DTypePolicy" in msg:
-                logger.warning(
-                    "Load falhou por DTypePolicy para %s (%s); tentando modo compat DTypePolicy",
-                    path,
-                    msg[:200],
-                )
-                try:
-                    _MODEL_CACHE[horizon] = tf.keras.models.load_model(
-                        path,
-                        compile=False,
-                        custom_objects={
-                            "DTypePolicy": DTypePolicyCompat,
-                            "InputLayer": InputLayerCompat,
-                        },
-                    )
-                    return _MODEL_CACHE[horizon]
-                except Exception as e2:
-                    logger.exception("Falha no modo compat (DTypePolicy) ao carregar %s", path)
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Falha ao carregar modelo {path.name}: {str(e2)[:200]}",
-                    )
-            logger.warning(
-                "Load falhou para %s (%s); tentando safe_mode=False com custom_objects",
-                path,
-                msg[:200],
-            )
-            try:
-                _MODEL_CACHE[horizon] = tf.keras.models.load_model(
-                    path,
-                    compile=False,
-                    safe_mode=False,
-                    custom_objects={
+        errors: list[str] = []
+        for attempt, kwargs, desc in [
+            ("normal", {"compile": False}, "padrão"),
+            (
+                "compat",
+                {
+                    "compile": False,
+                    "custom_objects": {
                         "InputLayer": InputLayerCompat,
                         "DTypePolicy": DTypePolicyCompat,
                     },
-                )
+                },
+                "modo compat (InputLayer/DTypePolicy)",
+            ),
+            (
+                "compat_safe",
+                {
+                    "compile": False,
+                    "safe_mode": False,
+                    "custom_objects": {
+                        "InputLayer": InputLayerCompat,
+                        "DTypePolicy": DTypePolicyCompat,
+                    },
+                },
+                "modo compat safe_mode=False",
+            ),
+        ]:
+            try:
+                _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, **kwargs)
                 return _MODEL_CACHE[horizon]
-            except Exception as e3:
-                logger.exception("Falha no safe_mode=False ao carregar %s", path)
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Falha ao carregar modelo {path.name}: {str(e3)[:200]}",
-                )
-        except Exception as e:
-            logger.exception("Falha ao carregar modelo %s", path)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Falha ao carregar modelo {path.name}: {str(e)[:200]}",
-            )
+            except Exception as e:
+                msg = str(e)
+                errors.append(f"{attempt}: {msg[:200]}")
+                if attempt == "compat":
+                    logger.warning(
+                        "Load %s falhou para %s (%s); tentando safe_mode=False",
+                        desc,
+                        path,
+                        msg[:200],
+                    )
+                else:
+                    logger.exception("Falha no load (%s) para %s", desc, path)
+        # Se todas falharem
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao carregar modelo {path.name}: {' | '.join(errors)}",
+        )
     return _MODEL_CACHE[horizon]
 
 
