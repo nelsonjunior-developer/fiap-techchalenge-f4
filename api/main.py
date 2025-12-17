@@ -163,6 +163,14 @@ class InputLayerCompat(tf.keras.layers.InputLayer):
         return cls(**cfg)
 
 
+class DTypePolicyCompat(tf.keras.mixed_precision.Policy):
+    """Compat para dtype policy serializado em h5 legados."""
+
+    @classmethod
+    def from_config(cls, config):  # type: ignore[override]
+        # Usa a factory oficial para recriar a policy a partir do config
+        return tf.keras.mixed_precision.Policy.from_config(config)
+
 def _get_model(horizon: int):
     candidates = [
         Path(settings.MODELS_DIR) / ("model_h1.keras" if horizon == 1 else "model_h5.keras"),
@@ -199,10 +207,31 @@ def _get_model(horizon: int):
                     _MODEL_CACHE[horizon] = tf.keras.models.load_model(
                         path,
                         compile=False,
-                        custom_objects={"InputLayer": InputLayerCompat},
+                        custom_objects={
+                            "InputLayer": InputLayerCompat,
+                            "DTypePolicy": DTypePolicyCompat,
+                        },
                     )
                 except Exception as e2:
                     logger.exception("Falha no modo compat ao carregar %s", path)
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Falha ao carregar modelo {path.name}: {str(e2)[:200]}",
+                    )
+            elif "DTypePolicy" in msg:
+                logger.warning(
+                    "Load falhou por DTypePolicy para %s (%s); tentando modo compat DTypePolicy",
+                    path,
+                    msg[:200],
+                )
+                try:
+                    _MODEL_CACHE[horizon] = tf.keras.models.load_model(
+                        path,
+                        compile=False,
+                        custom_objects={"DTypePolicy": DTypePolicyCompat},
+                    )
+                except Exception as e2:
+                    logger.exception("Falha no modo compat (DTypePolicy) ao carregar %s", path)
                     raise HTTPException(
                         status_code=500,
                         detail=f"Falha ao carregar modelo {path.name}: {str(e2)[:200]}",
