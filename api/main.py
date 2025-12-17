@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from joblib import load as joblib_load
 from loguru import logger
-from tensorflow.keras.models import load_model  # type: ignore
+import tensorflow as tf
 
 from api.monitoring import metrics_endpoint, prometheus_middleware
 from api.schemas import PredictRequest, PredictResponse, PredictTickerRequest
@@ -143,7 +143,7 @@ def _get_model(horizon: int):
         raise FileNotFoundError(f"Modelo não encontrado: {path}")
     if horizon not in _MODEL_CACHE:
         logger.info("Carregando modelo {}", path)
-        _MODEL_CACHE[horizon] = load_model(path, compile=False)
+        _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
     return _MODEL_CACHE[horizon]
 
 
@@ -181,6 +181,17 @@ def ready():
     if missing:
         raise HTTPException(
             status_code=503, detail={"ready": False, "missing": missing}
+        )
+    # Tenta carregar modelos e scaler para garantir readiness real
+    try:
+        _ = _get_model(1)
+        _ = _get_model(5)
+        _ = _get_scaler()
+    except Exception as e:
+        logger.exception("Readiness falhou ao carregar artefatos")
+        raise HTTPException(
+            status_code=503,
+            detail={"ready": False, "error": str(e)},
         )
     return {"ready": True}
 
@@ -347,10 +358,30 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
             },
         )
 
-    model = _get_model(payload.horizon)
-    y_pred_scaled: np.ndarray = model.predict(X_model, verbose=0).squeeze()
-    y_pred = _inverse_close(y_pred_scaled, scaler, close_idx)
-    y_pred = np.atleast_1d(y_pred).astype(float).tolist()
+    try:
+        model = _get_model(payload.horizon)
+        y_pred_scaled: np.ndarray = model.predict(X_model, verbose=0).squeeze()
+        y_pred = _inverse_close(y_pred_scaled, scaler, close_idx)
+        y_pred = np.atleast_1d(y_pred).astype(float).tolist()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "Falha ao inferir modelo | ticker=%s horizon=%s window=%s lookback=%s",
+            ticker,
+            payload.horizon,
+            window,
+            payload.lookback_days,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "model_inference_failed",
+                "message": str(e)[:300],
+                "type": type(e).__name__,
+                "hint": "veja logs do Render para stacktrace completo",
+            },
+        )
 
     return PredictResponse(
         horizon=payload.horizon,
