@@ -16,6 +16,7 @@ Obs.: Mantemos a engenharia de features aqui (lado servidor) para o endpoint
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple
 
@@ -99,9 +100,19 @@ def _download_ohlcv(ticker: str, lookback_days: int) -> pd.DataFrame:
 
     Retorna DataFrame com colunas [Open, High, Low, Close, Volume] ordenado por data.
     """
+    ticker = ticker.upper().strip()
+    end = datetime.utcnow()
+    start = end - timedelta(days=lookback_days)
     try:
-        tkr = yf.Ticker(ticker)
-        df = tkr.history(period=f"{lookback_days}d", interval="1d", auto_adjust=True)
+        df = yf.download(
+            ticker,
+            start=start.date().isoformat(),
+            end=end.date().isoformat(),
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=False,
+        )
     except Exception as e:
         raise RuntimeError(f"Falha no yfinance para {ticker}: {e}")
 
@@ -151,6 +162,7 @@ def _align_and_cut_window(
 ) -> pd.DataFrame:
     """Reordena colunas para `features_order`, remove NaNs e recorta as últimas `window` linhas."""
     df_feat = df_feat.copy()
+    df_feat = df_feat.replace([np.inf, -np.inf], np.nan)
     df_feat = df_feat[features_order]
     df_feat = df_feat.dropna()
     if len(df_feat) < window:
@@ -188,9 +200,18 @@ def prepare_window_for_model(
 
     # 1) baixa OHLCV bruto
     df = _download_ohlcv(ticker, lookback_days)
+    if df.shape[0] < window + 5:
+        raise ValueError(
+            f"Histórico insuficiente: precisa de pelo menos {window+5} linhas, recebeu {df.shape[0]}"
+        )
 
     # 2) constrói features derivadas
     df_feat = _build_features(df)
+    df_feat = df_feat.replace([np.inf, -np.inf], np.nan).dropna()
+    if df_feat.empty or df_feat.shape[0] < window:
+        raise ValueError(
+            "Features vazias ou insuficientes após limpeza; verifique ticker/intervalo."
+        )
 
     # 3) alinha a ordem e recorta a última janela estável
     df_win = _align_and_cut_window(df_feat, feats, window)
@@ -198,6 +219,10 @@ def prepare_window_for_model(
     # 4) carrega scaler e transforma
     scaler = joblib_load(Path(scaler_path))
     X_in = df_win.values.astype(float)  # (window, n_features)
+    if X_in.shape != (window, len(feats)):
+        raise ValueError(
+            f"Shape inesperado para janela: {X_in.shape}, esperado ({window}, {len(feats)})"
+        )
 
     try:
         X_scaled = scaler.transform(X_in)
