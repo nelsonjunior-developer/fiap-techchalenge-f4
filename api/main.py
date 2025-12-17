@@ -299,7 +299,7 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
         raise HTTPException(status_code=422, detail="horizon deve ser 1 ou 5")
 
     window = payload.window or settings.WINDOW
-    ticker = (payload.ticker or settings.TICKER).upper()
+    ticker = (payload.ticker or settings.TICKER).upper().strip()
 
     try:
         from api.inference import prepare_window_for_model  # type: ignore
@@ -327,8 +327,25 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Falha ao preparar janela: {e}")
+        logger.exception(
+            "prepare_window_for_model falhou | ticker=%s horizon=%s window=%s lookback=%s",
+            ticker,
+            payload.horizon,
+            window,
+            payload.lookback_days,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "predict_ticker_failed",
+                "message": str(e)[:300],
+                "type": type(e).__name__,
+                "hint": "veja logs do Render para stacktrace completo",
+            },
+        )
 
     model = _get_model(payload.horizon)
     y_pred_scaled: np.ndarray = model.predict(X_model, verbose=0).squeeze()
@@ -355,6 +372,25 @@ def predict_ticker(payload: PredictTickerRequest) -> PredictResponse:
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
+
+
+@app.get("/debug/yfinance", tags=["debug"])
+def debug_yfinance(ticker: str, lookback_days: int = 180) -> dict:
+    """Endpoint de diagnóstico para verificar download via yfinance (não carrega modelo)."""
+    from api.inference import _download_ohlcv  # type: ignore
+
+    df = _download_ohlcv(ticker, lookback_days)
+    if df.empty:
+        raise HTTPException(status_code=502, detail="yfinance retornou vazio")
+
+    return {
+        "ticker": ticker.upper().strip(),
+        "rows": int(df.shape[0]),
+        "cols": list(df.columns),
+        "min_date": df.index.min().isoformat() if not df.empty else None,
+        "max_date": df.index.max().isoformat() if not df.empty else None,
+        "head_close": df["Close"].head(3).tolist() if "Close" in df else [],
+    }
 
 
 # -------------------------------------------------------------------------------------
