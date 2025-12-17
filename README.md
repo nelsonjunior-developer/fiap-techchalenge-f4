@@ -323,7 +323,7 @@ Série do erro absoluto no passo **t+1** ao longo das amostras de teste (sem re-
 
 ## Dicas & Solução de Problemas
 - **Arquivos .npz não encontrados:** gere as janelas com `src.features` para o `--horizon` correspondente.  
-- **Aviso do Keras sobre HDF5:** ignorável; o `evaluate.py` usa `compile=False`. Se quiser, podemos salvar também no formato `.keras`.  
+- **Aviso do Keras sobre HDF5:** ignorável; o `evaluate.py` usa `compile=False`.  
 - **Erro de backend gráfico:** o `evaluate.py` já força `matplotlib` no backend `Agg`; apenas garanta `matplotlib` instalado.
 
 ---

@@ -53,6 +53,7 @@ features: ## Gera features para H=1 e H=5 (ambos)
 
 # ---- Train / Evaluate ----
 train: ## Treina H=1 e H=5 (salva modelos em models/)
+	@rm -f models/model_h*.keras
 	$(PY) -m src.train --horizon both --window $(WINDOW) --epochs $(EPOCHS) --batch_size $(BATCH)
 
 eval-h1: ## Avalia H=1 e salva plots
