@@ -135,6 +135,21 @@ _MODEL_CACHE: dict[int, object] = {}
 _SCALER = None
 
 
+class InputLayerCompat(tf.keras.layers.InputLayer):
+    """Compat layer para modelos .h5 legados com `batch_shape` no config."""
+
+    @classmethod
+    def from_config(cls, config):  # type: ignore[override]
+        cfg = dict(config)
+        batch_shape = cfg.pop("batch_shape", None)
+        if batch_shape is not None:
+            if len(batch_shape) >= 1:
+                cfg["batch_size"] = batch_shape[0]
+            if len(batch_shape) >= 2:
+                cfg["input_shape"] = tuple(batch_shape[1:])
+        return cls(**cfg)
+
+
 def _get_model(horizon: int):
     candidates = [
         Path(settings.MODELS_DIR) / ("model_h1.keras" if horizon == 1 else "model_h5.keras"),
@@ -159,6 +174,32 @@ def _get_model(horizon: int):
         )
         try:
             _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
+        except (TypeError, ValueError) as e:
+            msg = str(e)
+            if "batch_shape" in msg or "Unrecognized keyword arguments" in msg:
+                logger.warning(
+                    "Load padrão falhou para %s (%s); tentando modo compat InputLayer",
+                    path,
+                    msg[:200],
+                )
+                try:
+                    _MODEL_CACHE[horizon] = tf.keras.models.load_model(
+                        path,
+                        compile=False,
+                        custom_objects={"InputLayer": InputLayerCompat},
+                    )
+                except Exception as e2:
+                    logger.exception("Falha no modo compat ao carregar %s", path)
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Falha ao carregar modelo {path.name}: {str(e2)[:200]}",
+                    )
+            else:
+                logger.exception("Falha ao carregar modelo %s", path)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Falha ao carregar modelo {path.name}: {msg[:200]}",
+                )
         except Exception as e:
             logger.exception("Falha ao carregar modelo %s", path)
             raise HTTPException(
