@@ -136,14 +136,28 @@ _SCALER = None
 
 
 def _get_model(horizon: int):
-    path = Path(settings.MODELS_DIR) / (
-        "model_h1.h5" if horizon == 1 else "model_h5.h5"
-    )
-    if not path.exists():
-        raise FileNotFoundError(f"Modelo não encontrado: {path}")
+    candidates = [
+        Path(settings.MODELS_DIR) / ("model_h1.keras" if horizon == 1 else "model_h5.keras"),
+        Path(settings.MODELS_DIR) / ("model_h1.h5" if horizon == 1 else "model_h5.h5"),
+    ]
+    path = next((p for p in candidates if p.exists()), None)
+    if path is None:
+        raise FileNotFoundError(f"Modelo não encontrado (esperado .keras ou .h5) em {settings.MODELS_DIR}")
     if horizon not in _MODEL_CACHE:
-        logger.info("Carregando modelo {}", path)
-        _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
+        logger.info(
+            "Carregando modelo %s | tf=%s keras=%s",
+            path,
+            tf.__version__,
+            getattr(tf, "keras", None).__version__ if getattr(tf, "keras", None) else "unknown",
+        )
+        try:
+            _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
+        except Exception as e:
+            logger.exception("Falha ao carregar modelo %s", path)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Falha ao carregar modelo {path.name}: {str(e)[:200]}",
+            )
     return _MODEL_CACHE[horizon]
 
 
