@@ -144,11 +144,18 @@ def _get_model(horizon: int):
     if path is None:
         raise FileNotFoundError(f"Modelo não encontrado (esperado .keras ou .h5) em {settings.MODELS_DIR}")
     if horizon not in _MODEL_CACHE:
+        tf_version = getattr(tf, "__version__", "unknown")
+        try:
+            import keras as keras_pkg  # type: ignore
+
+            keras_version = getattr(keras_pkg, "__version__", "unknown")
+        except Exception:
+            keras_version = "unknown"
         logger.info(
             "Carregando modelo %s | tf=%s keras=%s",
             path,
-            tf.__version__,
-            getattr(tf, "keras", None).__version__ if getattr(tf, "keras", None) else "unknown",
+            tf_version,
+            keras_version,
         )
         try:
             _MODEL_CACHE[horizon] = tf.keras.models.load_model(path, compile=False)
