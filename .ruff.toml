@@ -1,4 +1,4 @@
-extend-exclude = ["notebooks/*.ipynb"]
+extend-exclude = ["notebooks/*.ipynb", ".venv-render/*"]
 
 [lint.per-file-ignores]
 "notebooks/eda.ipynb" = ["E401", "E701", "E702"]
