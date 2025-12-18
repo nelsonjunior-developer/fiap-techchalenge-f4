@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import Tuple
 
 import tensorflow as tf
-from tensorflow.keras import callbacks, layers, metrics, models, optimizers
 
 # Hiperparâmetros padrão (podem ser sobrescritos no train.py)
 DEFAULT_UNITS = 64
@@ -46,29 +45,29 @@ def build_lstm_model(
     Returns:
         tf.keras.Model compilado e pronto para treino.
     """
-    # Entrada com shape (window, n_features)
-    inputs = layers.Input(shape=(window, n_features), name="window_input")
+    # Entrada com shape (window, n_features) (NÃO usar batch_shape/batch_input_shape)
+    inputs = tf.keras.Input(shape=(window, n_features), name="window_input")
 
     # Camada recorrente principal
-    x = layers.LSTM(units, name="lstm_1")(inputs)
+    x = tf.keras.layers.LSTM(units, name="lstm_1")(inputs)
 
     # Regularização
     if dropout and dropout > 0:
-        x = layers.Dropout(dropout, name="dropout")(x)
+        x = tf.keras.layers.Dropout(dropout, name="dropout")(x)
 
     # Cabeça de regressão multi-saída (horizon neurônios)
-    outputs = layers.Dense(horizon, name="dense_out")(x)
+    outputs = tf.keras.layers.Dense(horizon, name="dense_out")(x)
 
-    model = models.Model(inputs=inputs, outputs=outputs, name=f"lstm_h{horizon}")
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=f"lstm_h{horizon}")
 
     # Compilação: MSE como perda; métricas para relatório
     model.compile(
-        optimizer=optimizers.Adam(learning_rate=lr),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr),
         loss="mse",
         metrics=[
-            metrics.MeanAbsoluteError(name="mae"),
-            metrics.RootMeanSquaredError(name="rmse"),
-            metrics.MeanAbsolutePercentageError(name="mape"),
+            tf.keras.metrics.MeanAbsoluteError(name="mae"),
+            tf.keras.metrics.RootMeanSquaredError(name="rmse"),
+            tf.keras.metrics.MeanAbsolutePercentageError(name="mape"),
         ],
     )
     return model
@@ -76,20 +75,20 @@ def build_lstm_model(
 
 def default_callbacks(
     patience_es: int = 10, patience_rlr: int = 5
-) -> Tuple[callbacks.Callback, ...]:
+) -> Tuple[tf.keras.callbacks.Callback, ...]:
     """Callbacks padrão para treino estável.
 
     - EarlyStopping: para quando `val_loss` não melhora, restaurando os melhores pesos.
     - ReduceLROnPlateau: reduz `lr` quando `val_loss` estagna, evitando ficar preso em platôs.
     """
-    es = callbacks.EarlyStopping(
+    es = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss",
         patience=patience_es,
         mode="min",
         restore_best_weights=True,
         verbose=1,
     )
-    rlr = callbacks.ReduceLROnPlateau(
+    rlr = tf.keras.callbacks.ReduceLROnPlateau(
         monitor="val_loss",
         factor=0.5,
         patience=patience_rlr,
