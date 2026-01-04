@@ -1,5 +1,26 @@
 # fiap-techchalenge-f4
 
+## Visão geral do projeto
+
+Este repositório implementa uma solução **end‑to‑end** de previsão de preço de ações (ex.: **AMZN**) usando **redes LSTM** com dois horizontes de previsão: **H=1** (baseline) e **H=5** (solução principal). O objetivo é demonstrar todo o ciclo de um projeto de ML — **coleta de dados → engenharia de features → treino/avaliação → API em produção → observabilidade → frontend** — de forma reprodutível.
+
+**O que foi feito (em alto nível):**
+- **Ingestão de dados** com `yfinance` (OHLCV) e organização em `data/raw`.
+- **Pré‑processamento e features**: criação de janelas temporais (window=60 por padrão), escalonamento e indicadores técnicos, gerando arrays em `data/processed`.
+- **Treinamento** de dois modelos LSTM (H=1 e H=5) e salvamento de artefatos em `models/` (modelo(s), `scaler`, `metadata`).
+- **Avaliação** com métricas (MAE/RMSE/MAPE) e gráficos de diagnóstico (predito vs real, resíduos e walk‑forward).
+- **API FastAPI** para servir previsões e metadados, incluindo endpoints de *health/readiness* e uma rota de métricas `/metrics` para Prometheus.
+- **Observabilidade local** via **Prometheus + Grafana** (Docker Compose) para acompanhar volume de requisições e latência.
+- **Frontend Streamlit** que consome a API e permite testar previsões de forma interativa.
+
+**Como validar rapidamente que está tudo funcionando:**
+1) Execute o pipeline com `make` (ex.: `make install && make data && make features && make train`).
+2) Suba a API (`make api`) e teste `GET /health` e `GET /ready`.
+3) Abra o Streamlit (`make streamlit`) e faça chamadas de previsão.
+4) (Opcional) Suba a stack de observabilidade (`make compose-up`) e veja os dashboards no Grafana.
+
+A seção abaixo mostra a arquitetura e o fluxo de dados/serviços utilizados.
+
 ## Arquitetura (visão geral)
 
 A figura abaixo resume o fluxo ponta‑a‑ponta do projeto.
