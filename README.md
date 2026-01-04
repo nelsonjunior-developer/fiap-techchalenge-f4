@@ -745,18 +745,6 @@ Se as consultas retornarem valores, os painéis no Grafana também devem popular
 
 > No modo Docker Compose, **API**, **Prometheus** e **Grafana** compartilham a mesma rede interna; o Grafana já vem provisionado com a datasource Prometheus e o dashboard “API Observability — Tech Challenge”.
 
-## Troubleshooting
-
-- **`ModuleNotFoundError: src.*`**: garanta que está executando a partir da **raiz do repositório** ou exporte:
-  ```bash
-  export PYTHONPATH=$(pwd)
-  ```
-- **`from __future__ import annotations`**: deve estar **no topo** do arquivo Python.
-- **Yahoo Finance bloqueando requisições**: use `yfinance>=0.2.66` e **não** injete `requests.Session()` manualmente.
-- **TensorFlow em Apple Silicon**: instale `tensorflow-macos` e `tensorflow-metal` ou use CPU (`tensorflow>=2.15,<3`).
-- **`metadata.json`/`scaler.joblib` ausentes**: gere `src.features`/`src.train` antes de subir a API.
-- **Validação de payload em `/predict`**: utilize `/features-order` para obter a ordem correta das features.
-
 ---
 
 ## Reprodutibilidade
